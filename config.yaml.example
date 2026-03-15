@@ -1,69 +1,188 @@
+# =============================================================================
+# jav-aio 配置文件示例
+# 使用方法：复制本文件为 config.yaml，按需修改后启动程序
+# =============================================================================
+
+# OpenList 连接配置
 openlist:
+  # OpenList 服务地址（必填）
+  # 示例：http://192.168.1.100:5244
   base_url: "http://your-openlist:5244"
+
+  # OpenList API Token（必填）
+  # 在 OpenList 管理后台 → 个人资料 → API 令牌 中获取
   token: "your-api-token"
+
+  # 要扫描的目录路径列表（OpenList 内的路径）
+  # 可配置多个目录，守护进程会定时扫描所有目录
   scan_paths:
     - "/jav/inbox"
+    # - "/jav/inbox2"
+
+  # 扫描时匹配的文件扩展名（小写）
   scan_extensions:
     - ".mp4"
     - ".mkv"
     - ".avi"
-  request_delay:
-    min: "500ms"
-    max: "2s"
-  min_file_size: "500MB"      # 最小文件大小，小于此值的文件跳过（视频广告过滤）。支持单位：B/K/KB/M/MB/G/GB/T/TB，留空或"0"不过滤
 
+  # API 请求间随机延迟范围，防止触发 OpenList 限流
+  # 每次请求后随机等待 min ~ max 之间的时间
+  request_delay:
+    min: "500ms"   # 最小延迟，支持单位：ms / s
+    max: "2s"      # 最大延迟
+
+  # 文件大小过滤阈值
+  # 小于此大小的视频文件将被跳过（用于过滤资源包中的视频广告）
+  # 支持单位（大小写均可）：B / K / KB / M / MB / G / GB / T / TB，支持小数
+  # 留空或 "0" 表示不过滤
+  # 示例："500MB"、"1G"、"1.5G"
+  min_file_size: "500MB"
+
+# 输出目录配置
 output:
+  # 处理结果根目录（必填）
+  # 每部影片将在此目录下创建以 JAV ID 命名的子目录
+  # 示例结构：/media/jav/ABC-123/ABC-123.strm
+  #                              ABC-123.nfo
+  #                              ABC-123.jpg
+  #                              ABC-123.srt
+  #                              ABC-123.zh.srt
   base_dir: "/media/jav"
 
+# 流水线配置
 pipeline:
+  # 守护进程轮询间隔（daemon 模式下定时扫描 scan_paths）
+  # 支持单位：s / m / h，示例："30m"、"1h"、"6h"
   poll_interval: "1h"
-  steps:
-    id_extract: true
-    scrape: true
-    strm: true
-    subtitle: true
-    translate: true
 
+  # 流水线各步骤开关（设为 false 可跳过对应步骤）
+  # 已完成的步骤会记录到数据库，重启后不会重复执行
+  steps:
+    id_extract: true   # 从文件名提取 JAV ID（如 ABC-123、FC2-PPV-123456）
+    scrape: true       # 从 javdb/javbus 等源抓取元数据，生成 NFO 和封面
+    strm: true         # 生成 .strm 串流文件（供 Emby/Jellyfin 使用）
+    subtitle: true     # 字幕处理（外挂字幕 → 内嵌字幕提取 → whisperJAV 识别）
+    translate: true    # 将字幕翻译为目标语言（依赖 translate 配置）
+
+# 重试策略（网络请求失败时自动重试）
 retry:
+  # 最大尝试次数（含首次），示例：3 = 失败后最多重试 2 次
   max_attempts: 3
+
+  # 初始重试等待时间（指数退避基准值）
   base_delay: "2s"
+
+  # 重试等待时间上限
   max_delay: "30s"
+
+  # 是否在等待时间中加入随机抖动，避免多任务同时重试造成拥堵
   jitter: true
 
+# 元数据抓取配置（使用 metatube-sdk-go）
 scraper:
-  preferred_sources: ["javdb", "javbus"]
+  # 优先使用的元数据源，按顺序尝试，全部失败后自动搜索所有可用源
+  # 可选值：javdb、javbus、tokyohot、caribbeancom、1pondo、heyzo、fc2 等
+  preferred_sources:
+    - "javdb"
+    - "javbus"
+
+  # 元数据语言（影响标题、演员等字段的语言版本）
+  # 可选值：zh（中文）、en（英文）、ja（日文）
   language: "zh"
+
+  # 是否下载封面图片（保存为 <JAV-ID>.jpg）
   cover: true
 
+# 字幕处理配置
 subtitle:
+  # whisperJAV 可执行文件路径
+  # 项目地址：https://github.com/meizhong986/WhisperJAV
+  # 示例："/usr/local/bin/whisperJAV" 或 "python /opt/WhisperJAV/whisperJAV.py"
+  # 留空则在没有内嵌/外挂字幕时跳过语音识别
   whisper_bin: "/usr/local/bin/whisperJAV"
-  model: "medium"
-  language: "ja"
-  ffmpeg_cache_dir: ""           # ffmpeg 缓存目录，空表示使用系统缓存目录
-  keep_audio: false
-  keep_audio_max: 5
-  audio_dir: ""                  # 音轨文件存放目录，空表示使用系统临时目录
 
+  # whisper 模型大小，越大越准确但越慢，需提前下载
+  # 可选值：tiny / base / small / medium / large
+  model: "medium"
+
+  # 视频音频的语言（用于指导 whisper 识别）
+  # 日语 JAV 通常为 "ja"
+  language: "ja"
+
+  # ffmpeg 可执行文件缓存目录
+  # 程序内嵌了 ffmpeg，首次运行时解压到此目录
+  # 留空使用系统默认缓存目录（推荐）
+  ffmpeg_cache_dir: ""
+
+  # 是否保留从视频中提取的音频文件（调试用）
+  keep_audio: false
+
+  # keep_audio=true 时最多保留多少个音频文件（LRU 淘汰旧文件）
+  keep_audio_max: 5
+
+  # 音频文件存放目录（keep_audio=true 时生效）
+  # 留空使用系统临时目录
+  audio_dir: ""
+
+# 字幕翻译配置
 translate:
+  # 翻译目标语言，翻译结果保存为 <JAV-ID>.<target_language>.srt
+  # 示例："zh"（中文）、"en"（英文）、"ko"（韩文）
   target_language: "zh"
+
+  # 翻译服务提供商
+  # 可选值：openai（默认，兼容所有 OpenAI 格式接口）、ollama（本地大模型）
   provider: "openai"
+
+  # OpenAI 配置（provider=openai 时生效）
   openai:
+    # API 密钥
     api_key: "sk-..."
+
+    # API 地址，支持 OpenAI 兼容的第三方服务（如 DeepSeek、Moonshot 等）
     base_url: "https://api.openai.com/v1"
+
+    # 使用的模型
+    # 示例：gpt-4o-mini（快速低价）、gpt-4o（质量更高）
     model: "gpt-4o-mini"
+
+  # Ollama 配置（provider=ollama 时生效，本地运行大模型）
   ollama:
+    # Ollama 服务地址
     base_url: "http://localhost:11434"
+
+    # 使用的模型（需提前通过 `ollama pull` 下载）
+    # 示例：qwen2.5:7b、llama3.1:8b
     model: "qwen2.5:7b"
 
+# Webhook 配置（接收外部推送，触发单个文件处理）
 webhook:
+  # 是否启用 Webhook 服务器
   enabled: true
+
+  # 监听端口
   port: 8080
+
+  # HMAC-SHA256 签名密钥，用于验证请求合法性
+  # 请求方需在 X-Signature 头中携带 sha256=<hmac(secret, body)>
+  # 留空则不验证签名（不推荐在公网使用）
   secret: "your-webhook-secret"
 
+# 日志配置
 log:
-  level: "debug"
-  format: "text"    # text | json
-  file: ""          # empty = stdout
+  # 日志级别：debug / info / warn / error
+  level: "info"
 
+  # 日志格式：text（人类可读）/ json（结构化，适合日志收集系统）
+  format: "text"
+
+  # 日志文件路径，留空输出到标准输出（stdout）
+  # 示例："/var/log/jav-aio.log"
+  file: ""
+
+# 状态数据库配置
 state:
+  # SQLite 数据库文件路径，记录每个文件每个步骤的完成状态
+  # 程序重启后会从数据库恢复未完成的任务
+  # 示例："/var/lib/jav-aio/state.db"
   db_path: "./jav-aio.db"

@@ -34,6 +34,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -99,7 +100,7 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 	args := []string{
 		audioPath,
 		"--model", r.model,
-		"--language", r.language,
+		"--language", languageName(r.language),
 		"--output-format", "srt",
 		"--output-dir", tmpDir,
 	}
@@ -148,6 +149,22 @@ func findSRT(dir string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no .srt file found in %s", dir)
+}
+
+// languageName converts BCP-47 codes to whisperjav full language names.
+func languageName(code string) string {
+	switch strings.ToLower(code) {
+	case "ja", "japanese":
+		return "japanese"
+	case "zh", "chinese":
+		return "chinese"
+	case "ko", "korean":
+		return "korean"
+	case "en", "english":
+		return "english"
+	default:
+		return code // pass through unknown codes as-is
+	}
 }
 
 // copyFile copies src to dst using os.ReadFile / os.WriteFile.

@@ -103,6 +103,9 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		"--language", languageName(r.language),
 		"--output-format", "srt",
 		"--output-dir", tmpDir,
+		"--no-signature",   // disable the WhisperJAV attribution URL appended at end of SRT
+		"--no-progress",    // suppress progress bars in captured stderr
+		"--accept-cpu-mode", // suppress interactive GPU warning when no CUDA is available
 	}
 
 	// Use a non-nil context; exec.CommandContext requires one.
@@ -111,12 +114,15 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 	}
 
 	cmd := exec.CommandContext(ctx, r.bin, args...)
-	var stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("whisperJAV failed: %w\nstderr: %s", err, stderr.String())
+		return "", fmt.Errorf("whisperJAV failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
 	}
+	// Log full output at debug level so issues can be diagnosed.
+	r.log.Debug("whisperJAV output", "stdout", stdout.String(), "stderr", stderr.String())
 
 	// Locate the generated .srt file and move it to the canonical path.
 	generated, err := findSRT(tmpDir)
@@ -130,11 +136,12 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		}
 	}
 
-	// Reject empty SRT files — WhisperJAV may write a zero-byte file when it
-	// detects no speech (silence, music-only, or unrecognised language).
-	if info, statErr := os.Stat(srtPath); statErr == nil && info.Size() == 0 {
+	// Reject SRT files with no subtitle blocks — WhisperJAV may write an empty
+	// or whitespace-only file when its hallucination filter removes all content.
+	srtContent, readErr := os.ReadFile(srtPath)
+	if readErr != nil || !hasSRTBlocks(srtContent) {
 		os.Remove(srtPath)
-		return "", fmt.Errorf("whisperJAV produced an empty SRT for %s (no speech detected)", javID)
+		return "", fmt.Errorf("whisperJAV produced no subtitles for %s (0 blocks after post-processing)", javID)
 	}
 
 	r.log.Debug("transcription done",
@@ -142,6 +149,12 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		"duration_ms", time.Since(start).Milliseconds(),
 	)
 	return srtPath, nil
+}
+
+// hasSRTBlocks returns true if the SRT content contains at least one subtitle
+// block (a line that looks like a timecode "HH:MM:SS,mmm --> HH:MM:SS,mmm").
+func hasSRTBlocks(content []byte) bool {
+	return strings.Contains(string(content), " --> ")
 }
 
 // findSRT returns the first .srt file found in dir.

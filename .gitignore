@@ -4,6 +4,9 @@ config.yaml
 # 第三方二进制（体积大，不提交）
 assets/
 
+# Python 虚拟环境
+.venv/
+
 # 编译产物
 jav-aio
 jav-aio.exe
@@ -16,3 +19,7 @@ jav-aio.exe
 
 # 测试临时文件
 /tmp/
+
+# 运行时生成文件（输出、音频缓存、ffmpeg 缓存）
+media/
+mid/

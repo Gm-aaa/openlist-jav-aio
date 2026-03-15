@@ -130,6 +130,13 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		}
 	}
 
+	// Reject empty SRT files — WhisperJAV may write a zero-byte file when it
+	// detects no speech (silence, music-only, or unrecognised language).
+	if info, statErr := os.Stat(srtPath); statErr == nil && info.Size() == 0 {
+		os.Remove(srtPath)
+		return "", fmt.Errorf("whisperJAV produced an empty SRT for %s (no speech detected)", javID)
+	}
+
 	r.log.Debug("transcription done",
 		"srt", srtPath,
 		"duration_ms", time.Since(start).Milliseconds(),

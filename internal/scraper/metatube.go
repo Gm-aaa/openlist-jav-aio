@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -137,16 +138,25 @@ func convertMovieInfo(m *model.MovieInfo, fallbackID string) *MovieInfo {
 	}
 }
 
-func downloadFile(ctx context.Context, url, dest string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func downloadFile(ctx context.Context, rawURL, dest string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return err
 	}
+	// Set Referer to the image host's origin so sites that check hotlink
+	// protection (e.g. JavBus) serve the image instead of returning 403.
+	if u, parseErr := url.Parse(rawURL); parseErr == nil {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host+"/")
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download %s: HTTP %d", rawURL, resp.StatusCode)
+	}
 	f, err := os.Create(dest)
 	if err != nil {
 		return err

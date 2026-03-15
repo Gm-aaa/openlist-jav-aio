@@ -36,7 +36,7 @@ func runSubtitle(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not extract JAV ID from path: %s", olPath)
 	}
 
-	fileURL, err := app.OL.GetFileURL(ctx, olPath)
+	fileURL, err := app.OL.GetFileURL(ctx, olPath, "")
 	if err != nil {
 		return fmt.Errorf("get file URL for %s: %w", olPath, err)
 	}

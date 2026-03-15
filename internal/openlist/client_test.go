@@ -53,14 +53,24 @@ func TestGetFileURL_Returns302URL(t *testing.T) {
 	defer srv.Close()
 
 	c := openlist.NewClient(srv.URL, "token", openlist.RequestDelay{})
-	url, err := c.GetFileURL(context.Background(), "/jav/ABC-123.mp4")
+	// No sign → falls back to token param
+	url, err := c.GetFileURL(context.Background(), "/jav/ABC-123.mp4", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Always use /d/ path — OpenList will 302 to actual cloud URL.
-	expected := srv.URL + "/d/jav/ABC-123.mp4"
+	expected := srv.URL + "/d/jav/ABC-123.mp4?token=token"
 	if url != expected {
 		t.Errorf("expected %s, got %s", expected, url)
+	}
+
+	// With sign → uses sign param
+	urlWithSign, err := c.GetFileURL(context.Background(), "/jav/ABC-123.mp4", "abc123sign=:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedWithSign := srv.URL + "/d/jav/ABC-123.mp4?sign=abc123sign=:0"
+	if urlWithSign != expectedWithSign {
+		t.Errorf("expected %s, got %s", expectedWithSign, urlWithSign)
 	}
 }
 

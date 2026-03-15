@@ -23,6 +23,7 @@ type FileInfo struct {
 	Path     string
 	Size     int64
 	Modified time.Time
+	Sign     string // OpenList sign token for direct download URL
 }
 
 type Client struct {
@@ -66,7 +67,7 @@ func (c *Client) post(ctx context.Context, endpoint string, body any, out any) e
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Authorization", c.token)
 	req.Header.Set("Content-Type", "application/json")
 
 	c.log.Debug("openlist request", "endpoint", endpoint, "body", string(b))
@@ -112,6 +113,7 @@ func (c *Client) ListFiles(ctx context.Context, dirPath string, extensions []str
 				IsDir    bool   `json:"is_dir"`
 				Size     int64  `json:"size"`
 				Modified string `json:"modified"`
+				Sign     string `json:"sign"`
 			} `json:"content"`
 		}
 		err := c.post(ctx, "/api/fs/list", map[string]any{
@@ -141,6 +143,7 @@ func (c *Client) ListFiles(ctx context.Context, dirPath string, extensions []str
 				Path:     path.Join(dirPath, item.Name),
 				Size:     item.Size,
 				Modified: mod,
+				Sign:     item.Sign,
 			})
 		}
 
@@ -153,15 +156,17 @@ func (c *Client) ListFiles(ctx context.Context, dirPath string, extensions []str
 	return results, nil
 }
 
-// GetFileURL returns the playback URL for a file.
-// Uses the OpenList /d/{path} endpoint which OpenList will 302-redirect to the
-// actual cloud storage URL. This works uniformly across all storage backends
-// (Aliyun Drive, OneDrive, Google Drive, etc.) that are configured with 302 in OpenList.
-// No API call is needed — the /d/ path is always valid and handles both
-// direct-link and 302 scenarios transparently.
-func (c *Client) GetFileURL(ctx context.Context, filePath string) (string, error) {
+// GetFileURL returns the direct download URL for a file.
+// sign should be the value from FileInfo.Sign returned by ListFiles.
+// If sign is empty, falls back to token-based auth.
+func (c *Client) GetFileURL(ctx context.Context, filePath, sign string) (string, error) {
 	c.log.Debug("constructing file URL", "path", filePath)
-	url := c.baseURL + "/d" + filePath
-	c.log.Debug("file URL ready", "path", filePath, "url", url)
-	return url, nil
+	var fileURL string
+	if sign != "" {
+		fileURL = c.baseURL + "/d" + filePath + "?sign=" + sign
+	} else {
+		fileURL = c.baseURL + "/d" + filePath + "?token=" + c.token
+	}
+	c.log.Debug("file URL ready", "path", filePath, "url", fileURL)
+	return fileURL, nil
 }

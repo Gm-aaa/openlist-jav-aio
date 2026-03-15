@@ -48,7 +48,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		fileURL, err := app.OL.GetFileURL(ctx, f.Path)
+		fileURL, err := app.OL.GetFileURL(ctx, f.Path, f.Sign)
 		if err != nil {
 			app.Log.Warn("get file URL failed, skipping", "file", f.Name, "error", err)
 			continue

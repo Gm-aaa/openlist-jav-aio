@@ -91,7 +91,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			javID = extractedID
 		}
 
-		fileURL, err := app.OL.GetFileURL(ctx, olPath)
+		fileURL, err := app.OL.GetFileURL(ctx, olPath, "")
 		if err != nil {
 			log.Warn("enqueue: get file URL failed", "path", olPath, "error", err)
 			return

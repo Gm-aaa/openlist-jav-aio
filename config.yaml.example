@@ -1,0 +1,66 @@
+openlist:
+  base_url: "http://your-openlist:5244"
+  token: "your-api-token"
+  scan_paths:
+    - "/jav/inbox"
+  scan_extensions:
+    - ".mp4"
+    - ".mkv"
+    - ".avi"
+  request_delay:
+    min: "500ms"
+    max: "2s"
+
+output:
+  base_dir: "/media/jav"
+
+pipeline:
+  poll_interval: "1h"
+  steps:
+    id_extract: true
+    scrape: true
+    strm: true
+    subtitle: true
+    translate: true
+
+retry:
+  max_attempts: 3
+  base_delay: "2s"
+  max_delay: "30s"
+  jitter: true
+
+scraper:
+  preferred_sources: ["javdb", "javbus"]
+  language: "zh"
+  cover: true
+
+subtitle:
+  whisper_bin: "/usr/local/bin/whisperJAV"
+  model: "medium"
+  language: "ja"
+  keep_audio: false
+  keep_audio_max: 5
+
+translate:
+  target_language: "zh"
+  provider: "openai"
+  openai:
+    api_key: "sk-..."
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4o-mini"
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "qwen2.5:7b"
+
+webhook:
+  enabled: true
+  port: 8080
+  secret: "your-webhook-secret"
+
+log:
+  level: "debug"
+  format: "text"    # text | json
+  file: ""          # empty = stdout
+
+state:
+  db_path: "./jav-aio.db"

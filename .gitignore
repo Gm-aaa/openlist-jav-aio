@@ -1,6 +1,9 @@
 # 用户本地配置（含密钥，不提交）
 config.yaml
 
+# 第三方二进制（体积大，不提交）
+assets/
+
 # 编译产物
 jav-aio
 jav-aio.exe

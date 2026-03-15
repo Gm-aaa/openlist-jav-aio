@@ -10,6 +10,7 @@ openlist:
   request_delay:
     min: "500ms"
     max: "2s"
+  min_file_size: 524288000    # 最小文件大小（字节），小于此值的文件跳过，0=不过滤。示例：524288000=500MB
 
 output:
   base_dir: "/media/jav"

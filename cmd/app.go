@@ -36,6 +36,20 @@ type App struct {
 	SubtitleProcessor *subtitle.Processor
 }
 
+// filterBySize returns only files whose size is >= minSize. minSize=0 means no filter.
+func filterBySize(files []openlist.FileInfo, minSize int64) []openlist.FileInfo {
+	if minSize <= 0 {
+		return files
+	}
+	out := files[:0:0]
+	for _, f := range files {
+		if f.Size >= minSize {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // buildApp reads viper config, initializes all components, and returns a ready App.
 func buildApp() (*App, error) {
 	cfg := config.Default()

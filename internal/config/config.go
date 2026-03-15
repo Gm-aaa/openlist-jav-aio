@@ -25,6 +25,7 @@ type OpenListConfig struct {
 	ScanPaths      []string     `mapstructure:"scan_paths"`
 	ScanExtensions []string     `mapstructure:"scan_extensions"`
 	RequestDelay   RequestDelay `mapstructure:"request_delay"`
+	MinFileSize    int64        `mapstructure:"min_file_size"` // bytes; 0 = no filter
 }
 
 type RequestDelay struct {

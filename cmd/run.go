@@ -37,6 +37,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("list files at %s: %w", dirPath, err)
 	}
+	files = filterBySize(files, cfg.OpenList.MinFileSize)
 
 	app.Log.Info("processing files", "count", len(files), "path", dirPath)
 

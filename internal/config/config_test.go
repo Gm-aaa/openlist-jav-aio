@@ -19,6 +19,12 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Subtitle.KeepAudioMax != 5 {
 		t.Errorf("expected default keep_audio_max 5, got %d", cfg.Subtitle.KeepAudioMax)
 	}
+	if cfg.Subtitle.Model != "medium" {
+		t.Errorf("expected default subtitle model 'medium', got %s", cfg.Subtitle.Model)
+	}
+	if cfg.Subtitle.Language != "ja" {
+		t.Errorf("expected default subtitle language 'ja', got %s", cfg.Subtitle.Language)
+	}
 }
 
 func TestLoadFromYAML(t *testing.T) {

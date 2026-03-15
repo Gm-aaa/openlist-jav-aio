@@ -38,8 +38,10 @@ subtitle:
   whisper_bin: "/usr/local/bin/whisperJAV"
   model: "medium"
   language: "ja"
+  ffmpeg_cache_dir: ""           # ffmpeg 缓存目录，空表示使用系统缓存目录
   keep_audio: false
   keep_audio_max: 5
+  audio_dir: ""                  # 音轨文件存放目录，空表示使用系统临时目录
 
 translate:
   target_language: "zh"

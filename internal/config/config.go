@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -25,7 +27,7 @@ type OpenListConfig struct {
 	ScanPaths      []string     `mapstructure:"scan_paths"`
 	ScanExtensions []string     `mapstructure:"scan_extensions"`
 	RequestDelay   RequestDelay `mapstructure:"request_delay"`
-	MinFileSize    int64        `mapstructure:"min_file_size"` // bytes; 0 = no filter
+	MinFileSize    string       `mapstructure:"min_file_size"` // e.g. "500MB", "1G"; "" or "0" = no filter
 }
 
 type RequestDelay struct {
@@ -236,4 +238,46 @@ func Default() *Config {
 		Log:     LogConfig{Level: "debug", Format: "text"},
 		State:   StateConfig{DBPath: "./jav-aio.db"},
 	}
+}
+
+// ParseSize parses a human-readable size string into bytes.
+// Supported units (case-insensitive): B, K/KB, M/MB, G/GB, T/TB.
+// A bare number is treated as bytes. Empty string or "0" returns 0.
+// Examples: "500MB" → 524288000, "1.5G" → 1610612736, "100" → 100.
+func ParseSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+
+	// Split numeric part from unit.
+	i := 0
+	for i < len(s) && (s[i] == '.' || (s[i] >= '0' && s[i] <= '9')) {
+		i++
+	}
+	numStr := strings.TrimSpace(s[:i])
+	unit := strings.ToUpper(strings.TrimSpace(s[i:]))
+
+	multipliers := map[string]int64{
+		"":   1,
+		"B":  1,
+		"K":  1024,
+		"KB": 1024,
+		"M":  1024 * 1024,
+		"MB": 1024 * 1024,
+		"G":  1024 * 1024 * 1024,
+		"GB": 1024 * 1024 * 1024,
+		"T":  1024 * 1024 * 1024 * 1024,
+		"TB": 1024 * 1024 * 1024 * 1024,
+	}
+	mult, ok := multipliers[unit]
+	if !ok {
+		return 0, fmt.Errorf("unknown size unit %q in %q", unit, s)
+	}
+
+	val, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size %q: %w", s, err)
+	}
+	return int64(val * float64(mult)), nil
 }

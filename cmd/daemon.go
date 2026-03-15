@@ -145,7 +145,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 					log.Warn("scan: list files failed", "path", scanPath, "error", err)
 					continue
 				}
-				for _, f := range filterBySize(files, cfg.OpenList.MinFileSize) {
+				for _, f := range filterBySize(files, app.MinFileBytes) {
 					enqueue(f.Path, "")
 				}
 			}

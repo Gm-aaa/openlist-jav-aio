@@ -95,6 +95,45 @@ func TestValidate_MissingRequired(t *testing.T) {
 	}
 }
 
+func TestParseSize(t *testing.T) {
+	cases := []struct {
+		input   string
+		want    int64
+		wantErr bool
+	}{
+		{"", 0, false},
+		{"0", 0, false},
+		{"100", 100, false},
+		{"1K", 1024, false},
+		{"1KB", 1024, false},
+		{"5M", 5 * 1024 * 1024, false},
+		{"500MB", 500 * 1024 * 1024, false},
+		{"1G", 1024 * 1024 * 1024, false},
+		{"1GB", 1024 * 1024 * 1024, false},
+		{"1.5G", int64(1.5 * 1024 * 1024 * 1024), false},
+		{"2T", 2 * 1024 * 1024 * 1024 * 1024, false},
+		{"5mb", 5 * 1024 * 1024, false}, // case-insensitive
+		{"badunit", 0, true},
+		{"notanum MB", 0, true},
+	}
+	for _, c := range cases {
+		got, err := config.ParseSize(c.input)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("ParseSize(%q): expected error, got nil", c.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ParseSize(%q): unexpected error: %v", c.input, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("ParseSize(%q): got %d, want %d", c.input, got, c.want)
+		}
+	}
+}
+
 func TestValidate_OK(t *testing.T) {
 	cfg := config.Default()
 	cfg.OpenList.BaseURL = "http://openlist:5244"

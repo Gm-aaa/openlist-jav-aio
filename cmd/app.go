@@ -34,16 +34,17 @@ type App struct {
 	Scraper           *scraper.Scraper
 	STRMFunc          func(ctx context.Context, javID, outDir, url string) error
 	SubtitleProcessor *subtitle.Processor
+	MinFileBytes      int64 // parsed from Cfg.OpenList.MinFileSize
 }
 
-// filterBySize returns only files whose size is >= minSize. minSize=0 means no filter.
-func filterBySize(files []openlist.FileInfo, minSize int64) []openlist.FileInfo {
-	if minSize <= 0 {
+// filterBySize returns only files whose size is >= minBytes. minBytes=0 means no filter.
+func filterBySize(files []openlist.FileInfo, minBytes int64) []openlist.FileInfo {
+	if minBytes <= 0 {
 		return files
 	}
 	out := files[:0:0]
 	for _, f := range files {
-		if f.Size >= minSize {
+		if f.Size >= minBytes {
 			out = append(out, f)
 		}
 	}
@@ -161,6 +162,12 @@ func buildApp() (*App, error) {
 		TargetLang:    cfg.Translate.TargetLanguage,
 	})
 
+	minFileBytes, err := config.ParseSize(cfg.OpenList.MinFileSize)
+	if err != nil {
+		log.Warn("invalid min_file_size, filter disabled", "value", cfg.OpenList.MinFileSize, "error", err)
+		minFileBytes = 0
+	}
+
 	return &App{
 		Cfg:               cfg,
 		Log:               log,
@@ -170,5 +177,6 @@ func buildApp() (*App, error) {
 		Scraper:           sc,
 		STRMFunc:          strmFunc,
 		SubtitleProcessor: subtitleProc,
+		MinFileBytes:      minFileBytes,
 	}, nil
 }

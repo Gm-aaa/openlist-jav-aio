@@ -118,7 +118,66 @@ func LoadFile(path string) (*Config, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, err
 	}
+	applySubDefaults(cfg)
 	return cfg, nil
+}
+
+// applySubDefaults fills in zero-value fields in sub-structs from known defaults.
+// This handles the case where a partial YAML block (e.g., subtitle: {whisper_bin: ...})
+// causes viper to overwrite the entire sub-struct, zeroing fields not present in YAML.
+func applySubDefaults(cfg *Config) {
+	d := Default()
+	if cfg.Subtitle.Model == "" {
+		cfg.Subtitle.Model = d.Subtitle.Model
+	}
+	if cfg.Subtitle.Language == "" {
+		cfg.Subtitle.Language = d.Subtitle.Language
+	}
+	if cfg.Subtitle.KeepAudioMax == 0 {
+		cfg.Subtitle.KeepAudioMax = d.Subtitle.KeepAudioMax
+	}
+	if cfg.Retry.MaxAttempts == 0 {
+		cfg.Retry.MaxAttempts = d.Retry.MaxAttempts
+	}
+	if cfg.Retry.BaseDelay == "" {
+		cfg.Retry.BaseDelay = d.Retry.BaseDelay
+	}
+	if cfg.Retry.MaxDelay == "" {
+		cfg.Retry.MaxDelay = d.Retry.MaxDelay
+	}
+	if cfg.Pipeline.PollInterval == "" {
+		cfg.Pipeline.PollInterval = d.Pipeline.PollInterval
+	}
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = d.Log.Level
+	}
+	if cfg.Log.Format == "" {
+		cfg.Log.Format = d.Log.Format
+	}
+	if cfg.State.DBPath == "" {
+		cfg.State.DBPath = d.State.DBPath
+	}
+	if cfg.Translate.TargetLanguage == "" {
+		cfg.Translate.TargetLanguage = d.Translate.TargetLanguage
+	}
+	if cfg.Translate.Provider == "" {
+		cfg.Translate.Provider = d.Translate.Provider
+	}
+	if cfg.Translate.OpenAI.BaseURL == "" {
+		cfg.Translate.OpenAI.BaseURL = d.Translate.OpenAI.BaseURL
+	}
+	if cfg.Translate.OpenAI.Model == "" {
+		cfg.Translate.OpenAI.Model = d.Translate.OpenAI.Model
+	}
+	if cfg.Translate.Ollama.BaseURL == "" {
+		cfg.Translate.Ollama.BaseURL = d.Translate.Ollama.BaseURL
+	}
+	if cfg.Translate.Ollama.Model == "" {
+		cfg.Translate.Ollama.Model = d.Translate.Ollama.Model
+	}
+	if cfg.Webhook.Port == 0 {
+		cfg.Webhook.Port = d.Webhook.Port
+	}
 }
 
 // Validate checks required fields are set.

@@ -36,7 +36,9 @@ output:
   base_dir: "/tmp/out"
 `
 	f := filepath.Join(t.TempDir(), "config.yaml")
-	os.WriteFile(f, []byte(yaml), 0644)
+	if err := os.WriteFile(f, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, err := config.LoadFile(f)
 	if err != nil {
@@ -48,6 +50,40 @@ output:
 	// Defaults should still apply for unset fields
 	if cfg.Retry.MaxAttempts != 3 {
 		t.Errorf("expected default retry, got %d", cfg.Retry.MaxAttempts)
+	}
+}
+
+func TestLoadFromYAML_PartialSubBlock(t *testing.T) {
+	// Only set whisper_bin in subtitle block; other subtitle defaults should be preserved.
+	yaml := `
+openlist:
+  base_url: "http://test:5244"
+  token: "tok"
+output:
+  base_dir: "/tmp/out"
+subtitle:
+  whisper_bin: "/opt/whisper"
+`
+	f := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(f, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadFile(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Subtitle.WhisperBin != "/opt/whisper" {
+		t.Errorf("expected whisper_bin=/opt/whisper, got %s", cfg.Subtitle.WhisperBin)
+	}
+	if cfg.Subtitle.Model != "medium" {
+		t.Errorf("expected default model=medium preserved, got %q", cfg.Subtitle.Model)
+	}
+	if cfg.Subtitle.Language != "ja" {
+		t.Errorf("expected default language=ja preserved, got %q", cfg.Subtitle.Language)
+	}
+	if cfg.Subtitle.KeepAudioMax != 5 {
+		t.Errorf("expected default keep_audio_max=5 preserved, got %d", cfg.Subtitle.KeepAudioMax)
 	}
 }
 

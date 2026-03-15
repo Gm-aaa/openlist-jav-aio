@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,7 +39,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	cfg := app.Cfg
 	log := app.Log
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	taskQueue := make(chan pipeline.Task, 100)

@@ -118,14 +118,14 @@ func LoadFile(path string) (*Config, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, err
 	}
-	applySubDefaults(cfg)
+	ApplySubDefaults(cfg)
 	return cfg, nil
 }
 
-// applySubDefaults fills in zero-value fields in sub-structs from known defaults.
+// ApplySubDefaults fills in zero-value fields in sub-structs from known defaults.
 // This handles the case where a partial YAML block (e.g., subtitle: {whisper_bin: ...})
 // causes viper to overwrite the entire sub-struct, zeroing fields not present in YAML.
-func applySubDefaults(cfg *Config) {
+func ApplySubDefaults(cfg *Config) {
 	d := Default()
 	if cfg.Subtitle.Model == "" {
 		cfg.Subtitle.Model = d.Subtitle.Model

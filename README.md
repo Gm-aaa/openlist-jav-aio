@@ -259,9 +259,28 @@ Content-Type: application/json
 
 | 依赖 | 用途 | 必须 |
 |------|------|------|
+| [metatube-sdk-go](https://github.com/metatube-community/metatube-sdk-go) | 元数据抓取（已编译进二进制） | scrape 步骤必须 |
 | ffmpeg / ffprobe | 字幕提取、音频提取 | subtitle 步骤必须 |
 | [whisperJAV](https://github.com/meizhong986/WhisperJAV) | 语音识别生成字幕 | 无内嵌/外挂字幕时需要 |
 | OpenAI 兼容 API 或 Ollama | 字幕翻译 | translate 步骤必须 |
+
+### metatube-sdk-go
+
+metatube-sdk-go 是 Go 模块依赖，已在编译时静态链接进二进制，**无需单独安装**。
+
+它支持从以下数据源抓取元数据（通过 `scraper.preferred_sources` 配置优先顺序）：
+
+| 数据源 | 配置值 |
+|--------|--------|
+| JavDB | `javdb` |
+| JavBus | `javbus` |
+| Tokyo Hot | `tokyohot` |
+| Caribbeancom | `caribbeancom` |
+| 1Pondo | `1pondo` |
+| Heyzo | `heyzo` |
+| FC2 | `fc2` |
+
+未配置 `preferred_sources` 或匹配失败时，自动搜索所有可用数据源。
 
 ### 安装 ffmpeg
 

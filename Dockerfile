@@ -9,15 +9,18 @@ RUN go mod download
 
 COPY . .
 
-# 如果 assets/linux_amd64 不存在（CI 中 gitignore 导致缺失），
-# 从系统包获取 ffmpeg/ffprobe 并放入 embed 路径，保证 go:embed 编译成功。
-RUN if [ ! -f internal/ffmpeg/assets/linux_amd64/ffmpeg ]; then \
-        apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
-        mkdir -p internal/ffmpeg/assets/linux_amd64 && \
-        cp "$(which ffmpeg)"  internal/ffmpeg/assets/linux_amd64/ffmpeg && \
-        cp "$(which ffprobe)" internal/ffmpeg/assets/linux_amd64/ffprobe && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
+# embed.go 要求 assets/linux_amd64 和 assets/windows_amd64 在编译时同时存在。
+# CI checkout 时两个目录均因 .gitignore 缺失，需在此补全：
+#   - linux_amd64：从系统包获取真实 ffmpeg/ffprobe 二进制（运行时使用）
+#   - windows_amd64：创建空占位文件（仅满足 go:embed 编译要求，Linux 镜像不使用）
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && mkdir -p internal/ffmpeg/assets/linux_amd64 \
+    && cp "$(which ffmpeg)"  internal/ffmpeg/assets/linux_amd64/ffmpeg \
+    && cp "$(which ffprobe)" internal/ffmpeg/assets/linux_amd64/ffprobe \
+    && mkdir -p internal/ffmpeg/assets/windows_amd64 \
+    && touch internal/ffmpeg/assets/windows_amd64/ffmpeg.exe \
+    && touch internal/ffmpeg/assets/windows_amd64/ffprobe.exe \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /jav-aio ./cmd
 

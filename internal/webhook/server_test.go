@@ -21,7 +21,7 @@ func sign(secret, body []byte) string {
 
 func TestWebhook_ValidOpenListPayload(t *testing.T) {
 	queued := make(chan string, 1)
-	srv := webhook.NewServer("test-secret", func(path, javID string) {
+	srv := webhook.NewServer("test-secret", func(path, javID, sign string) {
 		queued <- path
 	}, nil)
 
@@ -48,7 +48,7 @@ func TestWebhook_ValidOpenListPayload(t *testing.T) {
 }
 
 func TestWebhook_InvalidSignature(t *testing.T) {
-	srv := webhook.NewServer("test-secret", func(_, _ string) {}, nil)
+	srv := webhook.NewServer("test-secret", func(_, _, _ string) {}, nil)
 	body := []byte(`{"source":"openlist","event":"file.created","path":"/jav/X.mp4"}`)
 	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
 	req.Header.Set("X-Hub-Signature-256", "sha256=badhash")

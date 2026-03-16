@@ -79,7 +79,9 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	}
 
 	// enqueue builds and sends a Task into taskQueue.
-	enqueue := func(olPath, javID string) {
+	// sign is the OpenList download sign from ListFiles; pass "" if unknown
+	// (GetFileURL will fetch a fresh sign via /api/fs/get).
+	enqueue := func(olPath, javID, sign string) {
 		// Bail early if shutting down.
 		if ctx.Err() != nil {
 			return
@@ -96,6 +98,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 				for _, f := range files {
 					if extractedID, ok := id.Extract(f.Name); ok && extractedID == javID {
 						olPath = f.Path
+						sign = f.Sign
 						break
 					}
 				}
@@ -131,8 +134,16 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			return
 		}
 
-		fileURL, err := app.OL.GetFileURL(ctx, olPath, "")
+		// Deduplicate: skip if this path is already queued or being processed.
+		// Must happen before GetFileURL to avoid wasted API calls.
+		if _, loaded := inflight.LoadOrStore(olPath, struct{}{}); loaded {
+			log.Debug("enqueue: skipping duplicate", "path", olPath)
+			return
+		}
+
+		fileURL, err := app.OL.GetFileURL(ctx, olPath, sign)
 		if err != nil {
+			inflight.Delete(olPath)
 			log.Warn("enqueue: get file URL failed", "path", olPath, "error", err)
 			return
 		}
@@ -143,12 +154,6 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			JavID:        javID,
 			FileURL:      fileURL,
 			OutDir:       outDir,
-		}
-
-		// Deduplicate: skip if this path is already queued or being processed.
-		if _, loaded := inflight.LoadOrStore(olPath, struct{}{}); loaded {
-			log.Debug("enqueue: skipping duplicate", "path", olPath)
-			return
 		}
 
 		if !trySend(task) {
@@ -179,7 +184,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			if ctx.Err() != nil {
 				return
 			}
-			enqueue(rec.OpenListPath, rec.JavID)
+			enqueue(rec.OpenListPath, rec.JavID, "")
 		}
 	}()
 
@@ -204,7 +209,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 					if ctx.Err() != nil {
 						return
 					}
-					enqueue(f.Path, "")
+					enqueue(f.Path, "", f.Sign)
 				}
 			}
 		}

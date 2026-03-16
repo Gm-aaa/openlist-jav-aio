@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-type EnqueueFunc func(openlistPath, javID string)
+type EnqueueFunc func(openlistPath, javID, sign string)
 
 type Server struct {
 	secret  string
@@ -81,14 +81,14 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.log.Debug("webhook enqueue", "source", "openlist", "path", payload.Path)
-		s.enqueue(payload.Path, "")
+		s.enqueue(payload.Path, "", "")
 	case "external":
 		if payload.ID == "" {
 			http.Error(w, "missing id", http.StatusBadRequest)
 			return
 		}
 		s.log.Debug("webhook enqueue", "source", "external", "id", payload.ID)
-		s.enqueue("", payload.ID)
+		s.enqueue("", payload.ID, "")
 	default:
 		http.Error(w, "invalid source", http.StatusBadRequest)
 		return

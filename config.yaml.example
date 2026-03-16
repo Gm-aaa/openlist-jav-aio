@@ -101,11 +101,11 @@ subtitle:
   # whisperJAV 可执行文件路径
   # 项目地址：https://github.com/meizhong986/WhisperJAV
   #
-  # Docker 部署：保持 /app/bin/whisperjav（镜像内固定路径）
+  # Docker 部署：保持 "whisperjav"（pip install 后自动注册到 $PATH）
   # 本地运行：改为实际安装路径，如 "/usr/local/bin/whisperjav"
   #           或直接填命令名 "whisperjav"（需在 $PATH 中）
   # 留空则在没有内嵌/外挂字幕时跳过语音识别
-  whisper_bin: "/app/bin/whisperjav"
+  whisper_bin: "whisperjav"
 
   # Python 可执行文件，用于 `jav-aio model download` 命令下载模型
   # 需安装 huggingface_hub：pip install huggingface_hub

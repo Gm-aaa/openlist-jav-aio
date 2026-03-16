@@ -32,17 +32,16 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /jav-aio .
 FROM python:3.11-slim-bookworm
 
 # 固定目录结构（不依赖挂载路径）：
-#   /app/bin/whisperjav   —— WhisperJAV 可执行文件
 #   /app/ffmpeg/          —— ffmpeg_cache_dir（本镜像使用系统 ffmpeg，此目录闲置）
 #   /app/data/output/     —— 输出文件 (output.base_dir)
 #   /app/data/audio/      —— 音频缓存 (subtitle.audio_dir)
 #   /app/data/jav-aio.db  —— 状态数据库 (state.db_path)
 #   /app/config.yaml      —— 运行时挂载（只读）
-RUN mkdir -p /app/bin /app/ffmpeg /app/data/output /app/data/audio
+RUN mkdir -p /app/ffmpeg /app/data/output /app/data/audio
 
 # 安装运行时依赖：
 #   - ffmpeg：字幕检测、音频提取（findSystemFFmpeg 优先使用系统版本）
-#   - git：克隆 WhisperJAV 源码
+#   - git：pip install git+https:// 需要
 #   - libgomp1：ctranslate2 运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -56,14 +55,11 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 # 安装 faster-whisper 及 HuggingFace 工具库
 RUN pip install --no-cache-dir faster-whisper huggingface_hub
 
-# 从 GitHub 安装 WhisperJAV（PyPI 上不可用），并在固定路径创建 wrapper 脚本
+# 从 GitHub 安装 WhisperJAV（PyPI 上不可用）。
+# WhisperJAV 是标准 Python 包（pyproject.toml），pip install 后 whisperjav 命令
+# 会被安装到 /usr/local/bin/whisperjav。
 # 过滤掉 requirements.txt 中的 torch 行（已通过 CPU-only index 安装，避免版本冲突）
-RUN git clone --depth=1 https://github.com/meizhong986/WhisperJAV.git /opt/WhisperJAV \
-    && grep -iv "torch" /opt/WhisperJAV/requirements.txt \
-       | pip install --no-cache-dir -r /dev/stdin \
-    && printf '#!/bin/sh\nexec python /opt/WhisperJAV/whisperjav.py "$@"\n' \
-       > /app/bin/whisperjav \
-    && chmod +x /app/bin/whisperjav
+RUN pip install --no-cache-dir "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
 
 # 复制编译好的二进制并确保可执行权限
 COPY --from=builder /jav-aio /usr/local/bin/jav-aio

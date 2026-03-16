@@ -36,6 +36,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openlist-jav-aio/jav-aio/internal/util"
 )
 
 // resolveBin returns the absolute path of bin.
@@ -183,17 +185,13 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 	if err != nil {
 		return "", fmt.Errorf("find generated srt: %w", err)
 	}
-	if err := os.Rename(generated, srtPath); err != nil {
-		// Rename may fail across filesystems; fall back to copy+delete.
-		if copyErr := copyFile(generated, srtPath); copyErr != nil {
-			return "", fmt.Errorf("move srt to output: %w (copy fallback: %v)", err, copyErr)
-		}
+	if err := util.AtomicRename(generated, srtPath); err != nil {
+		return "", fmt.Errorf("move srt to output: %w", err)
 	}
 
 	// Reject SRT files with no subtitle blocks — WhisperJAV may write an empty
 	// or whitespace-only file when its hallucination filter removes all content.
-	srtContent, readErr := os.ReadFile(srtPath)
-	if readErr != nil || !hasSRTBlocks(srtContent) {
+	if !util.IsValidSRT(srtPath) {
 		os.Remove(srtPath)
 		return "", fmt.Errorf("whisperJAV produced no subtitles for %s (0 blocks after post-processing)", javID)
 	}
@@ -203,12 +201,6 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		"duration_ms", time.Since(start).Milliseconds(),
 	)
 	return srtPath, nil
-}
-
-// hasSRTBlocks returns true if the SRT content contains at least one subtitle
-// block (a line that looks like a timecode "HH:MM:SS,mmm --> HH:MM:SS,mmm").
-func hasSRTBlocks(content []byte) bool {
-	return strings.Contains(string(content), " --> ")
 }
 
 // findSRT returns the first .srt file found in dir.
@@ -241,11 +233,3 @@ func languageName(code string) string {
 	}
 }
 
-// copyFile copies src to dst using os.ReadFile / os.WriteFile.
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0644)
-}

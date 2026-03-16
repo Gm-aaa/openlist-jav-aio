@@ -14,6 +14,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/engine"
 	"github.com/metatube-community/metatube-sdk-go/engine/providerid"
 	"github.com/metatube-community/metatube-sdk-go/model"
+	"github.com/openlist-jav-aio/jav-aio/internal/util"
 )
 
 // Scraper wraps the metatube engine to fetch JAV metadata.
@@ -172,21 +173,6 @@ func downloadFile(ctx context.Context, rawURL, dest string) error {
 		os.Remove(tmpFile)
 		return err
 	}
-	return atomicRename(tmpFile, dest)
+	return util.AtomicRename(tmpFile, dest)
 }
 
-// atomicRename moves src to dst. Falls back to read+write+remove if rename
-// fails (e.g. cross-filesystem).
-func atomicRename(src, dst string) error {
-	if err := os.Rename(src, dst); err != nil {
-		data, readErr := os.ReadFile(src)
-		if readErr != nil {
-			return fmt.Errorf("rename %s → %s: %w; read fallback: %v", src, dst, err, readErr)
-		}
-		if writeErr := os.WriteFile(dst, data, 0644); writeErr != nil {
-			return fmt.Errorf("rename %s → %s: %w; write fallback: %v", src, dst, err, writeErr)
-		}
-		os.Remove(src)
-	}
-	return nil
-}

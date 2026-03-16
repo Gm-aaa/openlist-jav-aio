@@ -50,6 +50,9 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	taskQueue := make(chan pipeline.Task, 100)
 	workerDone := make(chan struct{})
 
+	// Dedup set: tracks paths currently in the queue or being processed.
+	var inflight sync.Map
+
 	// Start single worker goroutine.
 	go func() {
 		defer close(workerDone)
@@ -57,6 +60,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			if err := app.Pipeline.Run(ctx, task); err != nil {
 				log.Error("pipeline error", "id", task.JavID, "error", err)
 			}
+			inflight.Delete(task.OpenListPath)
 		}
 	}()
 
@@ -141,7 +145,15 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			OutDir:       outDir,
 		}
 
-		trySend(task)
+		// Deduplicate: skip if this path is already queued or being processed.
+		if _, loaded := inflight.LoadOrStore(olPath, struct{}{}); loaded {
+			log.Debug("enqueue: skipping duplicate", "path", olPath)
+			return
+		}
+
+		if !trySend(task) {
+			inflight.Delete(olPath)
+		}
 	}
 
 	// Track background goroutines to wait for them before closing taskQueue.

@@ -46,7 +46,6 @@ type PipelineConfig struct {
 }
 
 type StepsConfig struct {
-	IDExtract bool `mapstructure:"id_extract"`
 	Scrape    bool `mapstructure:"scrape"`
 	STRM      bool `mapstructure:"strm"`
 	Subtitle  bool `mapstructure:"subtitle"`
@@ -235,7 +234,7 @@ func Default() *Config {
 		Pipeline: PipelineConfig{
 			PollInterval: "1h",
 			Steps: StepsConfig{
-				IDExtract: true, Scrape: true, STRM: true,
+				Scrape: true, STRM: true,
 				Subtitle: true, Translate: true,
 			},
 		},

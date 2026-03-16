@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openlist-jav-aio/jav-aio/internal/util"
 )
 
 // tmpName returns a temporary filename that preserves the original extension
@@ -75,7 +77,7 @@ func (r *Runner) ExtractSubtitle(ctx context.Context, videoURL, destSRT string) 
 		os.Remove(tmpFile)
 		return err
 	}
-	return atomicRename(tmpFile, destSRT)
+	return util.AtomicRename(tmpFile, destSRT)
 }
 
 // ExtractAudio extracts only the audio stream from videoURL to destAudio.
@@ -116,7 +118,7 @@ func (r *Runner) ExtractAudio(ctx context.Context, videoURL, destAudio string) e
 				os.Remove(tmpFile)
 				return fmt.Errorf("extract audio: %w\nstderr: %s", err, stderr.String())
 			}
-			if err := atomicRename(tmpFile, destAudio); err != nil {
+			if err := util.AtomicRename(tmpFile, destAudio); err != nil {
 				return err
 			}
 			r.log.Info("audio extracted", "dest", destAudio,
@@ -129,22 +131,6 @@ func (r *Runner) ExtractAudio(ctx context.Context, videoURL, destAudio string) e
 				"size_mb", fileSizeMB(tmpFile))
 		}
 	}
-}
-
-// atomicRename moves src to dst. Falls back to read+write+remove if rename
-// fails (e.g. cross-filesystem).
-func atomicRename(src, dst string) error {
-	if err := os.Rename(src, dst); err != nil {
-		data, readErr := os.ReadFile(src)
-		if readErr != nil {
-			return fmt.Errorf("rename %s → %s: %w; read fallback: %v", src, dst, err, readErr)
-		}
-		if writeErr := os.WriteFile(dst, data, 0644); writeErr != nil {
-			return fmt.Errorf("rename %s → %s: %w; write fallback: %v", src, dst, err, writeErr)
-		}
-		os.Remove(src)
-	}
-	return nil
 }
 
 // fileSizeMB returns the file size in MB, or 0 if the file cannot be read.

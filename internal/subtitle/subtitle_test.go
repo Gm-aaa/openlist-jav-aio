@@ -8,49 +8,49 @@ import (
 	"github.com/openlist-jav-aio/jav-aio/internal/subtitle"
 )
 
-func TestHasExternalSubtitle_Found(t *testing.T) {
+func TestFindExternalSubtitle_Found(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "ABC-123.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\nHello\n"), 0644)
-	if !subtitle.HasExternalSubtitle(dir, "ABC-123") {
+	if got := subtitle.FindExternalSubtitle(dir, "ABC-123"); got == "" {
 		t.Error("expected external subtitle found")
 	}
 }
 
-func TestHasExternalSubtitle_Missing(t *testing.T) {
+func TestFindExternalSubtitle_Missing(t *testing.T) {
 	dir := t.TempDir()
-	if subtitle.HasExternalSubtitle(dir, "ABC-123") {
-		t.Error("expected no external subtitle")
+	if got := subtitle.FindExternalSubtitle(dir, "ABC-123"); got != "" {
+		t.Errorf("expected no external subtitle, got %s", got)
 	}
 }
 
-func TestHasExternalSubtitle_CaseInsensitive(t *testing.T) {
+func TestFindExternalSubtitle_CaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 	// File with upper-case ID, lookup with lower-case prefix
 	os.WriteFile(filepath.Join(dir, "ABC-123.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\nHello\n"), 0644)
-	if !subtitle.HasExternalSubtitle(dir, "abc-123") {
+	if got := subtitle.FindExternalSubtitle(dir, "abc-123"); got == "" {
 		t.Error("expected case-insensitive match")
 	}
 }
 
-func TestHasExternalSubtitle_TruncatedSRT(t *testing.T) {
+func TestFindExternalSubtitle_TruncatedSRT(t *testing.T) {
 	dir := t.TempDir()
-	// A truncated SRT (no timecodes) should be rejected and cleaned up.
+	// A truncated SRT (no timecodes) should be rejected but not deleted.
 	srtPath := filepath.Join(dir, "ABC-123.srt")
 	os.WriteFile(srtPath, []byte("garbage data"), 0644)
-	if subtitle.HasExternalSubtitle(dir, "ABC-123") {
-		t.Error("expected truncated SRT to be rejected")
+	if got := subtitle.FindExternalSubtitle(dir, "ABC-123"); got != "" {
+		t.Errorf("expected truncated SRT to be rejected, got %s", got)
 	}
-	// The corrupt file should have been removed.
-	if _, err := os.Stat(srtPath); !os.IsNotExist(err) {
-		t.Error("expected truncated SRT file to be removed")
+	// The file should still exist (not deleted).
+	if _, err := os.Stat(srtPath); err != nil {
+		t.Error("expected truncated SRT file to still exist on disk")
 	}
 }
 
-func TestHasExternalSubtitle_WrongExtension(t *testing.T) {
+func TestFindExternalSubtitle_WrongExtension(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "ABC-123.vtt"), []byte("WEBVTT"), 0644)
-	if subtitle.HasExternalSubtitle(dir, "ABC-123") {
-		t.Error("expected .vtt to not count as external .srt subtitle")
+	if got := subtitle.FindExternalSubtitle(dir, "ABC-123"); got != "" {
+		t.Errorf("expected .vtt to not count as external .srt subtitle, got %s", got)
 	}
 }
 

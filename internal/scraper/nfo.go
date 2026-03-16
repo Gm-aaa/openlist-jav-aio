@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/openlist-jav-aio/jav-aio/internal/util"
 )
 
 type MovieInfo struct {
@@ -63,5 +65,5 @@ func WriteNFO(outDir, javID string, info *MovieInfo) error {
 	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
 		return err
 	}
-	return atomicRename(tmpFile, dest)
+	return util.AtomicRename(tmpFile, dest)
 }

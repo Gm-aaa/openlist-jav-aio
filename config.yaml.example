@@ -61,7 +61,6 @@ pipeline:
   # 流水线各步骤开关（设为 false 可跳过对应步骤）
   # 已完成的步骤会记录到数据库，重启后不会重复执行
   steps:
-    id_extract: true   # 从文件名提取 JAV ID（如 ABC-123、FC2-PPV-123456）
     scrape: true       # 从 javdb/javbus 等源抓取元数据，生成 NFO 和封面
     strm: true         # 生成 .strm 串流文件（供 Emby/Jellyfin 使用）
     subtitle: true     # 字幕处理（外挂字幕 → 内嵌字幕提取 → whisperJAV 识别）
@@ -247,7 +246,7 @@ webhook:
   port: 8080
 
   # HMAC-SHA256 签名密钥，用于验证请求合法性
-  # 请求方需在 X-Signature 头中携带 sha256=<hmac(secret, body)>
+  # 请求方需在 X-Hub-Signature-256 头中携带 sha256=<hmac(secret, body)>
   # 留空则不验证签名（不推荐在公网使用）
   secret: "your-webhook-secret"
 

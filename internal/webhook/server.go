@@ -26,11 +26,18 @@ func NewServer(secret string, enqueue EnqueueFunc, log *slog.Logger) *Server {
 	}
 	s := &Server{secret: secret, enqueue: enqueue, log: log, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/webhook", s.handleWebhook)
+	s.mux.HandleFunc("/health", s.handleHealth)
 	return s
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {

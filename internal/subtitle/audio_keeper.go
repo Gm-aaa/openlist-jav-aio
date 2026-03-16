@@ -35,12 +35,3 @@ func (k *AudioKeeper) Add(filename string) {
 		os.Remove(filepath.Join(k.dir, oldest)) //nolint:errcheck — best-effort delete
 	}
 }
-
-// Files returns a snapshot of the currently tracked filenames (oldest first).
-func (k *AudioKeeper) Files() []string {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	out := make([]string, len(k.files))
-	copy(out, k.files)
-	return out
-}

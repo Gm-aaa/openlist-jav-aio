@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/openlist-jav-aio/jav-aio/internal/config"
+	"github.com/openlist-jav-aio/jav-aio/internal/retry"
 	"github.com/openlist-jav-aio/jav-aio/internal/state"
 )
 
@@ -23,6 +24,7 @@ type Task struct {
 type Deps struct {
 	DB            *state.DB
 	Steps         config.StepsConfig
+	RetryConfig   config.RetryConfig
 	Log           *slog.Logger
 	ScrapeFunc    func(ctx context.Context, javID, outDir string) error
 	STRMFunc      func(ctx context.Context, javID, outDir, url string) error
@@ -44,6 +46,28 @@ func New(deps Deps) *Pipeline {
 	return &Pipeline{deps: deps}
 }
 
+// toRetryConfig converts a config.RetryConfig (string durations) to a retry.Config.
+func toRetryConfig(rc config.RetryConfig) retry.Config {
+	base, _ := time.ParseDuration(rc.BaseDelay)
+	if base == 0 {
+		base = 2 * time.Second
+	}
+	max, _ := time.ParseDuration(rc.MaxDelay)
+	if max == 0 {
+		max = 30 * time.Second
+	}
+	attempts := rc.MaxAttempts
+	if attempts <= 0 {
+		attempts = 1
+	}
+	return retry.Config{
+		MaxAttempts: attempts,
+		BaseDelay:   base,
+		MaxDelay:    max,
+		Jitter:      rc.Jitter,
+	}
+}
+
 func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	log := p.deps.Log.With("id", task.JavID, "path", task.OpenListPath)
 	log.Info("pipeline start")
@@ -57,6 +81,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	}
 
 	d := p.deps
+	rc := toRetryConfig(d.RetryConfig)
 
 	// Helper: persist record and log errors (DB failure should not crash pipeline).
 	upsert := func(step string) {
@@ -76,7 +101,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	// Step: Scrape
 	if d.Steps.Scrape && !rec.ScrapeDone && d.ScrapeFunc != nil {
 		log.Debug("step start", "step", "scrape")
-		if err := d.ScrapeFunc(ctx, task.JavID, task.OutDir); err != nil {
+		if err := retry.Do(ctx, rc, func() error { return d.ScrapeFunc(ctx, task.JavID, task.OutDir) }); err != nil {
 			log.Error("scrape failed", "step", "scrape", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("scrape: %v", err)
 			upsert("scrape")
@@ -96,7 +121,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	// Step: STRM
 	if d.Steps.STRM && !rec.StrmDone && d.STRMFunc != nil {
 		log.Debug("step start", "step", "strm")
-		if err := d.STRMFunc(ctx, task.JavID, task.OutDir, task.FileURL); err != nil {
+		if err := retry.Do(ctx, rc, func() error { return d.STRMFunc(ctx, task.JavID, task.OutDir, task.FileURL) }); err != nil {
 			log.Error("strm failed", "step", "strm", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("strm: %v", err)
 			upsert("strm")
@@ -123,7 +148,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	// Step: Subtitle
 	if d.Steps.Subtitle && !rec.SubtitleDone && d.SubtitleFunc != nil {
 		log.Debug("step start", "step", "subtitle")
-		if err := d.SubtitleFunc(ctx, task.FileURL, task.OutDir, task.JavID); err != nil {
+		if err := retry.Do(ctx, rc, func() error { return d.SubtitleFunc(ctx, task.FileURL, task.OutDir, task.JavID) }); err != nil {
 			log.Error("subtitle failed", "step", "subtitle", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("subtitle: %v", err)
 			upsert("subtitle")
@@ -144,7 +169,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	// Step: Translate
 	if d.Steps.Translate && !rec.TranslateDone && srtPath != "" && d.TranslateFunc != nil {
 		log.Debug("step start", "step", "translate")
-		if err := d.TranslateFunc(ctx, srtPath, task.OutDir, task.JavID, d.TargetLang); err != nil {
+		if err := retry.Do(ctx, rc, func() error { return d.TranslateFunc(ctx, srtPath, task.OutDir, task.JavID, d.TargetLang) }); err != nil {
 			log.Error("translate failed", "step", "translate", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("translate: %v", err)
 			upsert("translate")

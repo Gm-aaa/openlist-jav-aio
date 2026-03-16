@@ -16,17 +16,18 @@ import (
 	"time"
 
 	"github.com/openlist-jav-aio/jav-aio/internal/ffmpeg"
+	"github.com/openlist-jav-aio/jav-aio/internal/util"
 	"github.com/openlist-jav-aio/jav-aio/internal/whisper"
 )
 
-// HasExternalSubtitle returns true if a valid .srt file whose name starts with
-// javID (case-insensitive) exists in outDir. Validity is checked by looking for
-// at least one SRT timecode marker (" --> "), which guards against truncated
-// files left behind by interrupted ffmpeg extractions.
-func HasExternalSubtitle(outDir, javID string) bool {
+// FindExternalSubtitle returns the path of a valid .srt file whose name starts
+// with javID (case-insensitive) in outDir, or "" if none is found. Validity is
+// checked by looking for at least one SRT timecode marker (" --> "), which
+// guards against truncated files left behind by interrupted ffmpeg extractions.
+func FindExternalSubtitle(outDir, javID string) string {
 	entries, err := os.ReadDir(outDir)
 	if err != nil {
-		return false
+		return ""
 	}
 	prefix := strings.ToLower(javID)
 	for _, e := range entries {
@@ -36,23 +37,12 @@ func HasExternalSubtitle(outDir, javID string) bool {
 		name := strings.ToLower(e.Name())
 		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".srt") {
 			path := filepath.Join(outDir, e.Name())
-			if isValidSRT(path) {
-				return true
+			if util.IsValidSRT(path) {
+				return path
 			}
-			// Truncated/corrupt SRT from a prior interrupted run — remove it.
-			os.Remove(path)
 		}
 	}
-	return false
-}
-
-// isValidSRT reads the file and checks for at least one SRT timecode marker.
-func isValidSRT(path string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(data), " --> ")
+	return ""
 }
 
 // Processor orchestrates the subtitle detection/generation pipeline for a
@@ -111,9 +101,9 @@ func (p *Processor) Process(ctx context.Context, videoURL, outDir, javID string)
 	p.log.Debug("subtitle process start", "id", javID)
 
 	// Tier 1: external subtitle already on disk.
-	if HasExternalSubtitle(outDir, javID) {
-		p.log.Debug("external subtitle found, skipping transcription", "id", javID)
-		return filepath.Join(outDir, javID+".srt"), nil
+	if srtPath := FindExternalSubtitle(outDir, javID); srtPath != "" {
+		p.log.Debug("external subtitle found, skipping transcription", "id", javID, "path", srtPath)
+		return srtPath, nil
 	}
 
 	// Tier 2: embedded subtitle stream in the remote video.

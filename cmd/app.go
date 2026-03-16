@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/openlist-jav-aio/jav-aio/internal/config"
+	"github.com/openlist-jav-aio/jav-aio/internal/util"
 	"github.com/openlist-jav-aio/jav-aio/internal/ffmpeg"
 	"github.com/openlist-jav-aio/jav-aio/internal/llm"
 	"github.com/openlist-jav-aio/jav-aio/internal/logger"
@@ -171,7 +172,7 @@ func buildApp() (*App, error) {
 		if err := os.WriteFile(tmpFile, []byte(translated), 0644); err != nil {
 			return err
 		}
-		return os.Rename(tmpFile, destPath)
+		return util.AtomicRename(tmpFile, destPath)
 	}
 
 	var notifyFunc func(ctx context.Context, task pipeline.Task, srtPath string)
@@ -183,9 +184,10 @@ func buildApp() (*App, error) {
 	}
 
 	pl := pipeline.New(pipeline.Deps{
-		DB:    db,
-		Steps: cfg.Pipeline.Steps,
-		Log:   log,
+		DB:          db,
+		Steps:       cfg.Pipeline.Steps,
+		RetryConfig: cfg.Retry,
+		Log:         log,
 		ScrapeFunc:    scrapeFunc,
 		STRMFunc:      strmFunc,
 		SubtitleFunc:  subtitleFunc,

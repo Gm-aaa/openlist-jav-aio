@@ -46,8 +46,7 @@ RUN mkdir -p /app/ffmpeg /app/data/output /app/data/audio
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         git \
-        libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+        libgomp1
 
 # 1) 先装 CPU-only PyTorch + torchaudio。必须在 WhisperJAV 之前从 CPU index 安装，
 #    否则 openai-whisper / stable-ts 依赖会从默认 index 拉 GPU 版（需 libtorch_cuda.so）。

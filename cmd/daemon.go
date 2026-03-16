@@ -115,6 +115,18 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			javID = extractedID
 		}
 
+		// Skip files that have already completed all enabled steps.
+		// This avoids unnecessary /api/fs/get calls for every known file on each scan.
+		enabledSteps := state.EnabledSteps{
+			Scrape:    cfg.Pipeline.Steps.Scrape,
+			STRM:      cfg.Pipeline.Steps.STRM,
+			Subtitle:  cfg.Pipeline.Steps.Subtitle,
+			Translate: cfg.Pipeline.Steps.Translate,
+		}
+		if app.DB.IsComplete(olPath, enabledSteps) {
+			return
+		}
+
 		fileURL, err := app.OL.GetFileURL(ctx, olPath, "")
 		if err != nil {
 			log.Warn("enqueue: get file URL failed", "path", olPath, "error", err)

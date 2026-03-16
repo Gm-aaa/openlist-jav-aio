@@ -163,6 +163,27 @@ func scanRecord(s scanner) (*Record, error) {
 	return &r, nil
 }
 
+// IsComplete returns true if the record exists and all enabled steps are done.
+func (d *DB) IsComplete(openlistPath string, steps EnabledSteps) bool {
+	r, err := d.Get(openlistPath)
+	if err != nil {
+		return false
+	}
+	if steps.Scrape && !r.ScrapeDone {
+		return false
+	}
+	if steps.STRM && !r.StrmDone {
+		return false
+	}
+	if steps.Subtitle && !r.SubtitleDone {
+		return false
+	}
+	if steps.Translate && !r.TranslateDone {
+		return false
+	}
+	return true
+}
+
 func boolInt(b bool) int {
 	if b {
 		return 1

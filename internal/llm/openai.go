@@ -31,7 +31,7 @@ func NewOpenAIProvider(baseURL, apiKey, model string, maxTokens int, log *slog.L
 		model:     model,
 		maxTokens: maxTokens,
 		log:       log,
-		client:    &http.Client{Timeout: 600 * time.Second},
+		client:    &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -43,8 +43,8 @@ func (p *OpenAIProvider) Translate(ctx context.Context, srt, targetLang string) 
 	chunks := len(ChunkBlocks(blocks, batchSize))
 	p.log.Debug("translating", "blocks", len(blocks), "chunks", chunks, "concurrency", llmConcurrency, "lang", targetLang)
 
-	translated, err := translateChunksConcurrent(ctx, blocks, llmConcurrency,
-		func(ctx context.Context, chunk string) (string, error) {
+	translated, err := translateChunksConcurrent(ctx, blocks, batchSize, llmConcurrency,
+		func(ctx context.Context, chunk []SRTBlock) ([]string, error) {
 			return p.translateChunk(ctx, chunk, targetLang)
 		},
 	)
@@ -54,43 +54,49 @@ func (p *OpenAIProvider) Translate(ctx context.Context, srt, targetLang string) 
 	return JoinSRT(translated), nil
 }
 
-func (p *OpenAIProvider) translateChunk(ctx context.Context, srt, lang string) (string, error) {
-	prompt := fmt.Sprintf(
-		"Translate the following SRT subtitle text lines to %s. "+
-			"Keep all index numbers and timecodes exactly unchanged. "+
-			"Only translate the dialogue text lines. Return valid SRT format.\n\n%s", lang, srt)
+// systemPrompt is the fixed instruction used as a system message.
+// Separated from user content to enable OpenAI's automatic prompt caching.
+const systemPrompt = "You are a subtitle translator. Translate each numbered line to the target language. " +
+	"Return ONLY the translated numbered lines in the same format. Do not add explanations."
+
+func (p *OpenAIProvider) translateChunk(ctx context.Context, chunk []SRTBlock, lang string) ([]string, error) {
+	// Send only the text lines (no timecodes) to reduce tokens by ~40-60%.
+	payload := buildTextOnlyPayload(chunk)
+	userMsg := fmt.Sprintf("Translate to %s:\n\n%s", lang, payload)
 
 	reqBody := map[string]any{
 		"model": p.model,
 		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": userMsg},
 		},
+		"temperature": 0,
 	}
 	if p.maxTokens > 0 {
 		reqBody["max_tokens"] = p.maxTokens
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		p.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("openai API status %d: %s", resp.StatusCode, string(errBody))
+		return nil, fmt.Errorf("openai API status %d: %s", resp.StatusCode, string(errBody))
 	}
 
 	var out struct {
@@ -99,10 +105,15 @@ func (p *OpenAIProvider) translateChunk(ctx context.Context, srt, lang string) (
 		} `json:"choices"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", err
+		return nil, err
 	}
 	if len(out.Choices) == 0 {
-		return "", fmt.Errorf("no choices in response")
+		return nil, fmt.Errorf("no choices in response")
 	}
-	return out.Choices[0].Message.Content, nil
+
+	lines := parseNumberedLines(out.Choices[0].Message.Content)
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("LLM returned no translatable lines")
+	}
+	return lines, nil
 }

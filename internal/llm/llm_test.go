@@ -22,7 +22,7 @@ func TestOpenAIProvider_Translate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
-				{"message": map[string]any{"content": "1\n00:00:01,000 --> 00:00:02,000\n你好\n"}},
+				{"message": map[string]any{"content": "1: 你好"}},
 			},
 		})
 	}))

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -36,6 +37,10 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	}
 	defer app.DB.Close()
 
+	if err := app.Cfg.Validate(); err != nil {
+		return fmt.Errorf("config validation: %w", err)
+	}
+
 	cfg := app.Cfg
 	log := app.Log
 
@@ -55,8 +60,27 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	// trySend sends a task to the queue, respecting context cancellation to avoid
+	// sending on a closed channel. Returns false if ctx is cancelled or queue is full.
+	trySend := func(task pipeline.Task) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case taskQueue <- task:
+			return true
+		default:
+			log.Warn("task queue full, dropping task", "id", task.JavID, "path", task.OpenListPath)
+			return false
+		}
+	}
+
 	// enqueue builds and sends a Task into taskQueue.
 	enqueue := func(olPath, javID string) {
+		// Bail early if shutting down.
+		if ctx.Err() != nil {
+			return
+		}
+
 		if olPath == "" && javID != "" {
 			// Search scan paths for a matching file.
 			for _, scanPath := range cfg.OpenList.ScanPaths {
@@ -105,15 +129,16 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			OutDir:       outDir,
 		}
 
-		select {
-		case taskQueue <- task:
-		default:
-			log.Warn("task queue full, dropping task", "id", javID, "path", olPath)
-		}
+		trySend(task)
 	}
 
+	// Track background goroutines to wait for them before closing taskQueue.
+	var bgWg sync.WaitGroup
+
 	// Re-enqueue incomplete tasks at startup.
+	bgWg.Add(1)
 	go func() {
+		defer bgWg.Done()
 		steps := state.EnabledSteps{
 			Scrape:    cfg.Pipeline.Steps.Scrape,
 			STRM:      cfg.Pipeline.Steps.STRM,
@@ -127,6 +152,9 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		}
 		log.Info("re-enqueueing incomplete tasks", "count", len(incomplete))
 		for _, rec := range incomplete {
+			if ctx.Err() != nil {
+				return
+			}
 			enqueue(rec.OpenListPath, rec.JavID)
 		}
 	}()
@@ -140,18 +168,28 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	} else {
 		scanFn := func(ctx context.Context) {
 			for _, scanPath := range cfg.OpenList.ScanPaths {
+				if ctx.Err() != nil {
+					return
+				}
 				files, err := app.OL.ListFiles(ctx, scanPath, cfg.OpenList.ScanExtensions)
 				if err != nil {
 					log.Warn("scan: list files failed", "path", scanPath, "error", err)
 					continue
 				}
 				for _, f := range filterBySize(files, app.MinFileBytes) {
+					if ctx.Err() != nil {
+						return
+					}
 					enqueue(f.Path, "")
 				}
 			}
 		}
 		sched := scheduler.New(pollInterval, scanFn).WithLogger(log)
-		sched.Start(ctx)
+		bgWg.Add(1)
+		go func() {
+			defer bgWg.Done()
+			sched.Start(ctx)
+		}()
 	}
 
 	// Webhook server.
@@ -171,7 +209,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	<-ctx.Done()
 	log.Info("daemon shutting down")
 
-	// Graceful HTTP shutdown.
+	// Graceful HTTP shutdown — stops accepting new webhook requests.
 	if httpServer != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -180,8 +218,11 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Close task queue and wait for worker to drain (up to 5 minutes).
+	// Wait for scheduler and re-enqueue goroutines to finish, then close queue.
+	bgWg.Wait()
 	close(taskQueue)
+
+	// Wait for worker to drain (up to 5 minutes).
 	select {
 	case <-workerDone:
 		log.Info("worker drained")

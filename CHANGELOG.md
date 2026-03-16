@@ -10,11 +10,30 @@
 
 - **Dockerfile `go build ./cmd`** — `cmd/` 包声明为 `package cmd`（非 `package main`），`go build ./cmd` 生成的是归档文件（`.a`）而非 ELF 可执行二进制，导致容器内 `exec format error`；改为 `go build .` 从根目录 `main.go` 构建
 - **Dockerfile 多平台 GOARCH** — 多平台构建（amd64 + arm64）时未设置 `GOARCH`，Go 默认使用宿主机架构，导致 arm64 变体编译出错误架构二进制
+- **Dockerfile ffmpeg 冗余** — 构建阶段不再复制 ~80MB 的真实 ffmpeg 二进制，改用空占位文件满足 `go:embed`，运行时使用 apt 安装的系统 ffmpeg
 - **ffmpeg 动态链接缺库** — 内嵌的 ffmpeg 为构建阶段的动态链接版本，运行时缺少 `libavdevice.so.59` 等共享库（`exit status 127`）；新增 `findSystemFFmpeg()` 优先使用系统 apt 安装的 ffmpeg，仅在系统无 ffmpeg 时回退到内嵌解压（Windows / 本地开发）
 - **docker-compose 数据库挂载** — `./jav-aio.db:/app/data/jav-aio.db` 在宿主机文件不存在时被 Docker 创建为目录；改为挂载整个 `./data:/app/data`
 - **`whisper/download.go`** — `DownloadModel` 将 stdout/stderr 捕获到 buffer，用户看不到模型下载进度（1.5~3GB 等待无反馈）；改为直接输出到终端
-- **`pipeline/pipeline.go`** — 步骤失败后设置 `rec.ErrorMsg`，但重试成功后未清除，导致数据库残留过期错误信息
 - **`subtitle/subtitle.go`** — `Process` 方法缺少 `p.ffmpeg` nil 检查，ffmpeg 初始化失败时直接调用会 panic
+- **`subtitle/subtitle.go`** — `HasExternalSubtitle` 未校验 SRT 内容，被中断的 ffmpeg 留下的截断空文件会被误判为有效字幕；新增 `" --> "` 时间码校验，自动删除无效 SRT
+- **`ffmpeg/runner.go` / `scraper/nfo.go` / `scraper/metatube.go` / `cmd/app.go`** — 文件写入非原子操作，进程中断时产生截断文件；改为写入 `.tmp` + `os.Rename` 原子替换
+- **`state/db.go`** — SQLite 并发写入冲突（`database is locked`）；启用 WAL 模式 + `busy_timeout=5000ms`；`Get` 返回 `ErrNotFound` 哨兵错误替代裸 `sql.ErrNoRows`
+- **`pipeline/pipeline.go`** — `DB.Get` 未区分"记录不存在"和"数据库错误"，真实 DB 故障被静默忽略；新增 `ErrNotFound` 判断，真实错误中断流水线
+- **`pipeline/pipeline.go`** — 步骤成功时无条件清除 `ErrorMsg`，导致后续步骤成功覆盖前序步骤的错误信息；改为 `clearError()` 仅清除本步骤设置的错误
+- **`pipeline/pipeline.go`** — 各步骤间缺少 `ctx.Err()` 检查，用户取消后仍继续执行后续步骤
+- **`cmd/daemon.go`** — 关停时 `close(taskQueue)` 先于后台 goroutine 退出，导致 `send on closed channel` panic；新增 `bgWg.Wait()` 保证 goroutine 全部退出后再关闭
+- **`cmd/daemon.go`** — 向 `taskQueue` 发送未检查 `ctx.Done()`，取消后阻塞或 panic；新增 `trySend()` 带 context 感知
+- **`webhook/server.go`** — HMAC 签名比较使用 `strings.EqualFold`（非恒定时间），存在时序攻击风险；改为 `hmac.Equal`
+- **`scheduler/scheduler.go`** — `fn` panic 导致整个调度器崩溃；新增 `safeRun()` panic recovery
+- **`openlist/client.go`** — 空页面未终止分页循环，OpenList 返回空 `Content` 时无限请求；新增 `len(data.Content) == 0` 守卫
+- **`openlist/client.go`** — `GetFileURL` 未编码路径中的空格和 CJK 字符，含特殊字符的文件名生成无效 URL；新增 `encodePath()` 逐段百分号编码
+- **`llm/deeplx.go`** — 信号量获取未检查 `ctx.Done()`，取消后 goroutine 泄漏；新增 select 双路监听
+
+### 优化
+
+- **LLM 翻译性能** — 仅发送对话文本（去除时间码和序号），减少 40–60% token 消耗；批次大小从 50 提升至 100；`temperature: 0` 确保确定性输出
+- **OpenAI prompt caching** — 固定 system message 与 user message 分离，命中 OpenAI 自动 prompt 缓存，降低重复请求成本
+- **Markdown 围栏剥离** — LLM 返回 ` ```srt ... ``` ` 包裹内容时自动剥离，避免翻译结果解析失败
 
 ---
 

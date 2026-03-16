@@ -58,5 +58,10 @@ func WriteNFO(outDir, javID string, info *MovieInfo) error {
 		return fmt.Errorf("marshal NFO: %w", err)
 	}
 	content := []byte(xml.Header + strings.TrimSpace(string(data)) + "\n")
-	return os.WriteFile(filepath.Join(outDir, javID+".nfo"), content, 0644)
+	dest := filepath.Join(outDir, javID+".nfo")
+	tmpFile := dest + ".tmp"
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		return err
+	}
+	return atomicRename(tmpFile, dest)
 }

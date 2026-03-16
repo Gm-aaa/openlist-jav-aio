@@ -75,7 +75,14 @@ func (p *DeepLXProvider) Translate(ctx context.Context, srt, targetLang string) 
 		wg.Add(1)
 		go func(i int, b SRTBlock) {
 			defer wg.Done()
-			sem <- struct{}{}
+
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				errs[i] = ctx.Err()
+				translated[i] = b
+				return
+			}
 			defer func() { <-sem }()
 
 			text, err := p.translateText(ctx, b.Text, target)

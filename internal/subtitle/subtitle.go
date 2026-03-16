@@ -19,8 +19,10 @@ import (
 	"github.com/openlist-jav-aio/jav-aio/internal/whisper"
 )
 
-// HasExternalSubtitle returns true if any .srt file whose name starts with javID
-// (case-insensitive) exists in outDir.
+// HasExternalSubtitle returns true if a valid .srt file whose name starts with
+// javID (case-insensitive) exists in outDir. Validity is checked by looking for
+// at least one SRT timecode marker (" --> "), which guards against truncated
+// files left behind by interrupted ffmpeg extractions.
 func HasExternalSubtitle(outDir, javID string) bool {
 	entries, err := os.ReadDir(outDir)
 	if err != nil {
@@ -33,10 +35,24 @@ func HasExternalSubtitle(outDir, javID string) bool {
 		}
 		name := strings.ToLower(e.Name())
 		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".srt") {
-			return true
+			path := filepath.Join(outDir, e.Name())
+			if isValidSRT(path) {
+				return true
+			}
+			// Truncated/corrupt SRT from a prior interrupted run — remove it.
+			os.Remove(path)
 		}
 	}
 	return false
+}
+
+// isValidSRT reads the file and checks for at least one SRT timecode marker.
+func isValidSRT(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), " --> ")
 }
 
 // Processor orchestrates the subtitle detection/generation pipeline for a

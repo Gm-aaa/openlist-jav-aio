@@ -96,6 +96,16 @@ func (s *Server) verifySignature(body []byte, sig string) bool {
 	}
 	mac := hmac.New(sha256.New, []byte(s.secret))
 	mac.Write(body)
-	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-	return strings.EqualFold(expected, sig)
+	expected := mac.Sum(nil)
+
+	// Parse "sha256=<hex>" prefix.
+	const prefix = "sha256="
+	if len(sig) <= len(prefix) || !strings.EqualFold(sig[:len(prefix)], prefix) {
+		return false
+	}
+	actual, err := hex.DecodeString(sig[len(prefix):])
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(expected, actual)
 }

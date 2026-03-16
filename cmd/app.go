@@ -167,7 +167,11 @@ func buildApp() (*App, error) {
 			return err
 		}
 		destPath := filepath.Join(outDir, javID+"."+lang+".srt")
-		return os.WriteFile(destPath, []byte(translated), 0644)
+		tmpFile := destPath + ".tmp"
+		if err := os.WriteFile(tmpFile, []byte(translated), 0644); err != nil {
+			return err
+		}
+		return os.Rename(tmpFile, destPath)
 	}
 
 	var notifyFunc func(ctx context.Context, task pipeline.Task, srtPath string)

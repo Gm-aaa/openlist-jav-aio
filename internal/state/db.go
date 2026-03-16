@@ -2,12 +2,16 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
 )
+
+// ErrNotFound is returned by Get when no record exists for the given path.
+var ErrNotFound = errors.New("record not found")
 
 type Record struct {
 	ID            int64
@@ -39,6 +43,17 @@ func Open(path string) (*DB, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite %s: %w", path, err)
+	}
+	// WAL mode allows concurrent reads while writing; busy_timeout retries on lock
+	// instead of failing immediately — both essential for daemon's concurrent access.
+	for _, pragma := range []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA busy_timeout=5000",
+	} {
+		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("sqlite %s: %w", pragma, err)
+		}
 	}
 	if err := migrate(db); err != nil {
 		return nil, err
@@ -90,7 +105,11 @@ func (d *DB) Get(openlistPath string) (*Record, error) {
 	row := d.sql.QueryRow(
 		`SELECT id, openlist_path, jav_id, scrape_done, strm_done, subtitle_done, translate_done, error_msg, created_at, updated_at
 		 FROM processed_files WHERE openlist_path=?`, openlistPath)
-	return scanRecord(row)
+	r, err := scanRecord(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return r, err
 }
 
 // ListIncomplete returns records that have at least one enabled step not yet completed.

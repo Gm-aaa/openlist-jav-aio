@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -147,7 +148,7 @@ func (c *Client) ListFiles(ctx context.Context, dirPath string, extensions []str
 			})
 		}
 
-		if page*perPage >= data.Total {
+		if len(data.Content) == 0 || page*perPage >= data.Total {
 			break
 		}
 		page++
@@ -161,12 +162,25 @@ func (c *Client) ListFiles(ctx context.Context, dirPath string, extensions []str
 // If sign is empty, falls back to token-based auth.
 func (c *Client) GetFileURL(ctx context.Context, filePath, sign string) (string, error) {
 	c.log.Debug("constructing file URL", "path", filePath)
+	// Encode each path segment to handle spaces and special characters.
+	encodedPath := encodePath(filePath)
 	var fileURL string
 	if sign != "" {
-		fileURL = c.baseURL + "/d" + filePath + "?sign=" + sign
+		fileURL = c.baseURL + "/d" + encodedPath + "?sign=" + sign
 	} else {
-		fileURL = c.baseURL + "/d" + filePath + "?token=" + c.token
+		fileURL = c.baseURL + "/d" + encodedPath + "?token=" + c.token
 	}
 	c.log.Debug("file URL ready", "path", filePath, "url", fileURL)
 	return fileURL, nil
+}
+
+// encodePath percent-encodes each segment of a slash-separated path,
+// preserving the slash separators. This handles filenames with spaces,
+// CJK characters, or other special characters.
+func encodePath(p string) string {
+	segments := strings.Split(p, "/")
+	for i, seg := range segments {
+		segments[i] = url.PathEscape(seg)
+	}
+	return strings.Join(segments, "/")
 }

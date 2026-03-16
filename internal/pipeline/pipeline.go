@@ -2,9 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/openlist-jav-aio/jav-aio/internal/config"
@@ -48,11 +50,28 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 	start := time.Now()
 
 	rec, err := p.deps.DB.Get(task.OpenListPath)
-	if err != nil {
+	if errors.Is(err, state.ErrNotFound) {
 		rec = &state.Record{OpenListPath: task.OpenListPath, JavID: task.JavID}
+	} else if err != nil {
+		return fmt.Errorf("db get %s: %w", task.OpenListPath, err)
 	}
 
 	d := p.deps
+
+	// Helper: persist record and log errors (DB failure should not crash pipeline).
+	upsert := func(step string) {
+		if err := d.DB.Upsert(rec); err != nil {
+			log.Error("db upsert failed", "step", step, "error", err)
+		}
+	}
+
+	// clearError only clears ErrorMsg if it was set by the given step,
+	// so a later step's success doesn't erase a prior step's error.
+	clearError := func(step string) {
+		if strings.HasPrefix(rec.ErrorMsg, step+":") {
+			rec.ErrorMsg = ""
+		}
+	}
 
 	// Step: Scrape
 	if d.Steps.Scrape && !rec.ScrapeDone && d.ScrapeFunc != nil {
@@ -60,13 +79,18 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 		if err := d.ScrapeFunc(ctx, task.JavID, task.OutDir); err != nil {
 			log.Error("scrape failed", "step", "scrape", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("scrape: %v", err)
-			d.DB.Upsert(rec)
+			upsert("scrape")
 		} else {
 			rec.ScrapeDone = true
-			rec.ErrorMsg = ""
-			d.DB.Upsert(rec)
+			clearError("scrape")
+			upsert("scrape")
 			log.Debug("step done", "step", "scrape")
 		}
+	}
+
+	if ctx.Err() != nil {
+		log.Info("pipeline cancelled", "duration_ms", time.Since(start).Milliseconds())
+		return ctx.Err()
 	}
 
 	// Step: STRM
@@ -75,13 +99,18 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 		if err := d.STRMFunc(ctx, task.JavID, task.OutDir, task.FileURL); err != nil {
 			log.Error("strm failed", "step", "strm", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("strm: %v", err)
-			d.DB.Upsert(rec)
+			upsert("strm")
 		} else {
 			rec.StrmDone = true
-			rec.ErrorMsg = ""
-			d.DB.Upsert(rec)
+			clearError("strm")
+			upsert("strm")
 			log.Debug("step done", "step", "strm")
 		}
+	}
+
+	if ctx.Err() != nil {
+		log.Info("pipeline cancelled", "duration_ms", time.Since(start).Milliseconds())
+		return ctx.Err()
 	}
 
 	// Pre-populate srtPath if subtitle was already completed in a prior run,
@@ -97,14 +126,19 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 		if err := d.SubtitleFunc(ctx, task.FileURL, task.OutDir, task.JavID); err != nil {
 			log.Error("subtitle failed", "step", "subtitle", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("subtitle: %v", err)
-			d.DB.Upsert(rec)
+			upsert("subtitle")
 		} else {
 			rec.SubtitleDone = true
-			rec.ErrorMsg = ""
+			clearError("subtitle")
 			srtPath = filepath.Join(task.OutDir, task.JavID+".srt")
-			d.DB.Upsert(rec)
+			upsert("subtitle")
 			log.Debug("step done", "step", "subtitle")
 		}
+	}
+
+	if ctx.Err() != nil {
+		log.Info("pipeline cancelled", "duration_ms", time.Since(start).Milliseconds())
+		return ctx.Err()
 	}
 
 	// Step: Translate
@@ -113,11 +147,11 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 		if err := d.TranslateFunc(ctx, srtPath, task.OutDir, task.JavID, d.TargetLang); err != nil {
 			log.Error("translate failed", "step", "translate", "error", err)
 			rec.ErrorMsg = fmt.Sprintf("translate: %v", err)
-			d.DB.Upsert(rec)
+			upsert("translate")
 		} else {
 			rec.TranslateDone = true
-			rec.ErrorMsg = ""
-			d.DB.Upsert(rec)
+			clearError("translate")
+			upsert("translate")
 			log.Debug("step done", "step", "translate")
 			if d.NotifyFunc != nil {
 				d.NotifyFunc(ctx, task, srtPath)

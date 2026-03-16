@@ -37,8 +37,8 @@ func (p *OllamaProvider) Translate(ctx context.Context, srt, targetLang string) 
 	}
 	p.log.Debug("translating via ollama", "blocks", len(blocks), "concurrency", llmConcurrency)
 
-	translated, err := translateChunksConcurrent(ctx, blocks, llmConcurrency,
-		func(ctx context.Context, chunk string) (string, error) {
+	translated, err := translateChunksConcurrent(ctx, blocks, batchSize, llmConcurrency,
+		func(ctx context.Context, chunk []SRTBlock) ([]string, error) {
 			return p.translateChunk(ctx, chunk, targetLang)
 		},
 	)
@@ -48,43 +48,49 @@ func (p *OllamaProvider) Translate(ctx context.Context, srt, targetLang string) 
 	return JoinSRT(translated), nil
 }
 
-func (p *OllamaProvider) translateChunk(ctx context.Context, srt, lang string) (string, error) {
+func (p *OllamaProvider) translateChunk(ctx context.Context, chunk []SRTBlock, lang string) ([]string, error) {
+	payload := buildTextOnlyPayload(chunk)
 	prompt := fmt.Sprintf(
-		"Translate the following SRT subtitle text to %s. "+
-			"Preserve all index numbers and timecodes. Only translate dialogue. Return SRT format.\n\n%s", lang, srt)
+		"Translate each numbered line to %s. Return ONLY the translated numbered lines in the same format.\n\n%s", lang, payload)
 
 	body, err := json.Marshal(map[string]any{
-		"model":  p.model,
-		"prompt": prompt,
-		"stream": false,
+		"model":       p.model,
+		"prompt":      prompt,
+		"stream":      false,
+		"temperature": 0,
 	})
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		p.baseURL+"/api/generate", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("ollama API status %d: %s", resp.StatusCode, string(errBody))
+		return nil, fmt.Errorf("ollama API status %d: %s", resp.StatusCode, string(errBody))
 	}
 
 	var out struct {
 		Response string `json:"response"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", err
+		return nil, err
 	}
-	return out.Response, nil
+
+	lines := parseNumberedLines(out.Response)
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("LLM returned no translatable lines")
+	}
+	return lines, nil
 }

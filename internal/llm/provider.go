@@ -7,10 +7,9 @@ type Provider interface {
 }
 
 // batchSize is the maximum number of SRT blocks per LLM request chunk.
-// Chunks are sent concurrently (see llmConcurrency), so total time ≈ time of
-// one chunk rather than batchSize × chunks.
-// 50 blocks ≈ 500–1000 input tokens + similar output, well within any model limit.
-const batchSize = 50
+// 100 blocks ≈ 1000–3000 tokens (text-only mode, no timecodes), well within
+// any model's context window. Larger batches = fewer API calls = faster.
+const batchSize = 100
 
-// llmConcurrency is the maximum number of concurrent LLM translation requests.
+// llmConcurrency is the default maximum number of concurrent LLM translation requests.
 const llmConcurrency = 10

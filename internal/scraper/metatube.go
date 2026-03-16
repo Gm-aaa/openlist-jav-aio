@@ -157,11 +157,36 @@ func downloadFile(ctx context.Context, rawURL, dest string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: HTTP %d", rawURL, resp.StatusCode)
 	}
-	f, err := os.Create(dest)
+	// Write to temp file then rename for crash safety.
+	tmpFile := dest + ".tmp"
+	f, err := os.Create(tmpFile)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-	return err
+	if _, err = io.Copy(f, resp.Body); err != nil {
+		f.Close()
+		os.Remove(tmpFile)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmpFile)
+		return err
+	}
+	return atomicRename(tmpFile, dest)
+}
+
+// atomicRename moves src to dst. Falls back to read+write+remove if rename
+// fails (e.g. cross-filesystem).
+func atomicRename(src, dst string) error {
+	if err := os.Rename(src, dst); err != nil {
+		data, readErr := os.ReadFile(src)
+		if readErr != nil {
+			return fmt.Errorf("rename %s → %s: %w; read fallback: %v", src, dst, err, readErr)
+		}
+		if writeErr := os.WriteFile(dst, data, 0644); writeErr != nil {
+			return fmt.Errorf("rename %s → %s: %w; write fallback: %v", src, dst, err, writeErr)
+		}
+		os.Remove(src)
+	}
+	return nil
 }

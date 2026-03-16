@@ -26,9 +26,23 @@ func TestHasExternalSubtitle_Missing(t *testing.T) {
 func TestHasExternalSubtitle_CaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 	// File with upper-case ID, lookup with lower-case prefix
-	os.WriteFile(filepath.Join(dir, "ABC-123.srt"), []byte("sub"), 0644)
+	os.WriteFile(filepath.Join(dir, "ABC-123.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\nHello\n"), 0644)
 	if !subtitle.HasExternalSubtitle(dir, "abc-123") {
 		t.Error("expected case-insensitive match")
+	}
+}
+
+func TestHasExternalSubtitle_TruncatedSRT(t *testing.T) {
+	dir := t.TempDir()
+	// A truncated SRT (no timecodes) should be rejected and cleaned up.
+	srtPath := filepath.Join(dir, "ABC-123.srt")
+	os.WriteFile(srtPath, []byte("garbage data"), 0644)
+	if subtitle.HasExternalSubtitle(dir, "ABC-123") {
+		t.Error("expected truncated SRT to be rejected")
+	}
+	// The corrupt file should have been removed.
+	if _, err := os.Stat(srtPath); !os.IsNotExist(err) {
+		t.Error("expected truncated SRT file to be removed")
 	}
 }
 

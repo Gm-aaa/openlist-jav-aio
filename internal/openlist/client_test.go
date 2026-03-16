@@ -39,38 +39,39 @@ func TestListFiles_SinglePage(t *testing.T) {
 	}
 }
 
-func TestGetFileURL_Returns302URL(t *testing.T) {
+func TestGetFileURL_WithSign(t *testing.T) {
+	c := openlist.NewClient("http://localhost", "token", openlist.RequestDelay{})
+	// With sign → uses sign param directly, no API call needed.
+	url, err := c.GetFileURL(context.Background(), "/jav/ABC-123.mp4", "abc123sign=:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "http://localhost/d/jav/ABC-123.mp4?sign=abc123sign=:0"
+	if url != expected {
+		t.Errorf("expected %s, got %s", expected, url)
+	}
+}
+
+func TestGetFileURL_FetchesSign(t *testing.T) {
+	// No sign provided → GetFileURL calls /api/fs/get to fetch one.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// /api/fs/get always returns the /d/ path URL
 		json.NewEncoder(w).Encode(map[string]any{
 			"code": 200,
 			"data": map[string]any{
-				"raw_url": "https://cdn.example.com/file.mp4",
-				"sign":    "",
+				"sign": "fetched_sign=:0",
 			},
 		})
 	}))
 	defer srv.Close()
 
 	c := openlist.NewClient(srv.URL, "token", openlist.RequestDelay{})
-	// No sign → falls back to token param
 	url, err := c.GetFileURL(context.Background(), "/jav/ABC-123.mp4", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := srv.URL + "/d/jav/ABC-123.mp4?token=token"
+	expected := srv.URL + "/d/jav/ABC-123.mp4?sign=fetched_sign=:0"
 	if url != expected {
 		t.Errorf("expected %s, got %s", expected, url)
-	}
-
-	// With sign → uses sign param
-	urlWithSign, err := c.GetFileURL(context.Background(), "/jav/ABC-123.mp4", "abc123sign=:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectedWithSign := srv.URL + "/d/jav/ABC-123.mp4?sign=abc123sign=:0"
-	if urlWithSign != expectedWithSign {
-		t.Errorf("expected %s, got %s", expectedWithSign, urlWithSign)
 	}
 }
 

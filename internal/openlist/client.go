@@ -156,19 +156,33 @@ func (c *Client) ListFiles(ctx context.Context, dirPath string, extensions []str
 	return results, nil
 }
 
+// GetSign calls /api/fs/get to retrieve the download sign for a file.
+func (c *Client) GetSign(ctx context.Context, filePath string) (string, error) {
+	var data struct {
+		Sign string `json:"sign"`
+	}
+	if err := c.post(ctx, "/api/fs/get", map[string]string{"path": filePath}, &data); err != nil {
+		return "", fmt.Errorf("get sign for %s: %w", filePath, err)
+	}
+	return data.Sign, nil
+}
+
 // GetFileURL returns the direct download URL for a file.
 // sign should be the value from FileInfo.Sign returned by ListFiles.
-// If sign is empty, falls back to token-based auth.
+// If sign is empty, calls /api/fs/get to fetch a fresh sign.
 func (c *Client) GetFileURL(ctx context.Context, filePath, sign string) (string, error) {
 	c.log.Debug("constructing file URL", "path", filePath)
-	// Encode each path segment to handle spaces and special characters.
-	encodedPath := encodePath(filePath)
-	var fileURL string
-	if sign != "" {
-		fileURL = c.baseURL + "/d" + encodedPath + "?sign=" + sign
-	} else {
-		fileURL = c.baseURL + "/d" + encodedPath + "?token=" + c.token
+
+	if sign == "" {
+		var err error
+		sign, err = c.GetSign(ctx, filePath)
+		if err != nil {
+			return "", err
+		}
 	}
+
+	encodedPath := encodePath(filePath)
+	fileURL := c.baseURL + "/d" + encodedPath + "?sign=" + sign
 	c.log.Debug("file URL ready", "path", filePath, "url", fileURL)
 	return fileURL, nil
 }

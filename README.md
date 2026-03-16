@@ -33,11 +33,23 @@
 
 Docker 镜像内置 WhisperJAV 和 ffmpeg，开箱即用，无需手动配置 Python 环境。
 
-**1. 准备配置文件**
+**1. 拉取镜像**
 
 ```bash
-cp config.yaml.example config.docker.yaml
+docker pull ghcr.io/gm-aaa/openlist-jav-aio:latest
 ```
+
+**2. 获取 docker-compose 和配置模板**
+
+```bash
+# 下载 docker-compose.yml
+curl -O https://raw.githubusercontent.com/Gm-aaa/openlist-jav-aio/master/docker-compose.yml
+
+# 下载配置模板并重命名为 Docker 专用配置
+curl -o config.docker.yaml https://raw.githubusercontent.com/Gm-aaa/openlist-jav-aio/master/config.yaml.example
+```
+
+**3. 编辑配置文件**
 
 编辑 `config.docker.yaml`，至少填写以下字段（路径已为容器内固定路径，无需修改）：
 
@@ -69,19 +81,19 @@ state:
   db_path: "/app/data/jav-aio.db"
 ```
 
-**2. 启动服务**
+**4. 启动服务**
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-**3. 预下载 Whisper 语音识别模型**（首次部署必做，模型约 1.5GB，缓存在命名卷中）
+**5. 预下载 Whisper 语音识别模型**（首次部署必做，模型约 1.5GB，缓存在命名卷中，之后重启无需重复）
 
 ```bash
 docker compose exec jav-aio jav-aio model download medium --config /app/config.yaml
 ```
 
-**4. 查看运行日志**
+**6. 查看运行日志**
 
 ```bash
 docker compose logs -f

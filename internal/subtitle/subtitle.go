@@ -125,7 +125,7 @@ func (p *Processor) Process(ctx context.Context, videoURL, outDir, javID string)
 
 	srtPath, err := p.whisper.Transcribe(ctx, audioPath, outDir, javID)
 	if err != nil {
-		os.Remove(audioPath)
+		p.handleAudioRetention(audioPath) // respect keepAudio even on failure
 		return "", fmt.Errorf("whisper transcribe: %w", err)
 	}
 

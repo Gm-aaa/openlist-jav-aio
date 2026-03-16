@@ -101,13 +101,45 @@ subtitle:
   # 留空则在没有内嵌/外挂字幕时跳过语音识别
   whisper_bin: "/usr/local/bin/whisperJAV"
 
-  # whisper 模型大小，越大越准确但越慢，需提前下载
-  # 可选值：tiny / base / small / medium / large
+  # Python 可执行文件，用于 `jav-aio model download` 命令下载模型
+  # 需安装 huggingface_hub：pip install huggingface_hub
+  # 留空使用默认值 "python3"
+  python_bin: "python3"
+
+  # Whisper 模型大小。模型越大识别率越高，但速度越慢、占用内存越多。
+  # 使用前请先运行：jav-aio model download
+  #
+  # 短名称（自动解析为 Systran/faster-whisper-* HuggingFace 仓库）：
+  #   tiny    — 最快，精度低，仅用于测试
+  #   base    — 较快，精度一般
+  #   small   — 速度/精度平衡，推荐入门
+  #   medium  — 默认，日语识别较好（约 1.5GB）
+  #   large-v3— 最高精度，推荐生产使用（约 3GB，需 4GB+ 内存）
+  #
+  # 也可填写完整 HuggingFace Repo ID：
+  #   litagin/anime-whisper  — 针对动画/成人内容优化的日语模型
   model: "medium"
 
   # 视频音频的语言（用于指导 whisper 识别）
   # 日语 JAV 通常为 "ja"
   language: "ja"
+
+  # WhisperJAV 幻觉过滤器灵敏度
+  # 可选值：aggressive / conservative / balanced；留空使用 WhisperJAV 默认值
+  # 提示：medium 模型在日语 JAV 内容上容易触发幻觉过滤导致字幕为空，
+  #       可设为 "aggressive" 降低过滤力度
+  sensitivity: ""
+
+  # CTranslate2 量化精度（影响推理速度与精度）
+  # 可选值：int8 / int8_float32 / float16 / float32
+  # CPU 服务器推荐：int8_float32（比 float32 快 2-3x，精度损失极小）
+  # GPU 服务器推荐：float16
+  # 留空使用 WhisperJAV 默认值
+  compute_type: ""
+
+  # CPU 推理线程数，留空或 0 使用 WhisperJAV 默认值（通常为 1 核）
+  # 建议设置为服务器 vCPU 数量以充分利用多核，例如 12 核服务器填 12
+  cpu_threads: 0
 
   # ffmpeg 可执行文件缓存目录
   # 程序内嵌了 ffmpeg，首次运行时解压到此目录
@@ -131,15 +163,33 @@ translate:
   target_language: "zh"
 
   # 翻译服务提供商
-  # 可选值：openai（默认，兼容所有 OpenAI 格式接口）、ollama（本地大模型）
-  provider: "openai"
+  # 可选值：
+  #   deeplx  — 推荐，速度极快（秒级），质量顶级，免费（需本地部署 DeepLX）
+  #   openai  — OpenAI 兼容接口，支持 GPT / Kimi / DeepSeek 等，按 token 计费
+  #   ollama  — 本地大模型，免费但速度慢
+  provider: "deeplx"
+
+  # LLM 输出 token 上限（仅 openai / ollama 生效）
+  # 0 = 使用 API 默认值（通常 4096，可能导致长字幕被截断）
+  # 建议：8192 ~ 16384（需确认所用模型支持该输出长度）
+  max_tokens: 0
+
+  # DeepLX 配置（provider=deeplx 时生效）
+  # 部署方式：docker run -d -p 1188:1188 zu1k/deeplx
+  deeplx:
+    # DeepLX 服务地址
+    base_url: "http://localhost:1188"
+
+    # 源语言（留空让 DeepL 自动检测）
+    # JAV 日语内容填 "JA"
+    source_lang: "JA"
 
   # OpenAI 配置（provider=openai 时生效）
   openai:
     # API 密钥
     api_key: "sk-..."
 
-    # API 地址，支持 OpenAI 兼容的第三方服务（如 DeepSeek、Moonshot 等）
+    # API 地址，支持 OpenAI 兼容的第三方服务（如 DeepSeek、Moonshot、火山方舟等）
     base_url: "https://api.openai.com/v1"
 
     # 使用的模型
@@ -154,6 +204,29 @@ translate:
     # 使用的模型（需提前通过 `ollama pull` 下载）
     # 示例：qwen2.5:7b、llama3.1:8b
     model: "qwen2.5:7b"
+
+# 主动通知配置（字幕翻译完成后主动推送 Webhook 通知）
+notify:
+  # 是否启用翻译完成通知
+  enabled: false
+
+  # 通知目标 URL（POST 请求，Body 为 JSON）
+  # 示例：飞书机器人、企业微信、Bark、n8n Webhook 等
+  url: "https://your-webhook-endpoint"
+
+  # 可选的自定义请求头（用于认证等）
+  # headers:
+  #   Authorization: "Bearer your-token"
+  #   X-Custom-Header: "value"
+
+# 通知 Payload 格式（JSON）：
+# {
+#   "event":     "translate_done",
+#   "jav_id":    "GVH-815",
+#   "path":      "/115/girl/gvh-815/4k2.me@gvh-815.mp4",
+#   "srt_path":  "/media/jav/GVH-815/GVH-815.srt",
+#   "timestamp": "2026-03-16T00:59:22Z"
+# }
 
 # Webhook 配置（接收外部推送，触发单个文件处理）
 webhook:

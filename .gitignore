@@ -1,5 +1,6 @@
 # 用户本地配置（含密钥，不提交）
 config.yaml
+config.docker.yaml
 
 # 第三方二进制（体积大，不提交）
 assets/

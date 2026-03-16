@@ -17,6 +17,7 @@ type Config struct {
 	Subtitle  SubtitleConfig  `mapstructure:"subtitle"`
 	Translate TranslateConfig `mapstructure:"translate"`
 	Webhook   WebhookConfig   `mapstructure:"webhook"`
+	Notify    NotifyConfig    `mapstructure:"notify"`
 	Log       LogConfig       `mapstructure:"log"`
 	State     StateConfig     `mapstructure:"state"`
 }
@@ -67,8 +68,12 @@ type ScraperConfig struct {
 
 type SubtitleConfig struct {
 	WhisperBin     string `mapstructure:"whisper_bin"`
+	PythonBin      string `mapstructure:"python_bin"`    // python executable used by "jav-aio model download"
 	Model          string `mapstructure:"model"`
 	Language       string `mapstructure:"language"`
+	Sensitivity    string `mapstructure:"sensitivity"`   // "" = WhisperJAV default; "aggressive" / "conservative" / "balanced"
+	ComputeType    string `mapstructure:"compute_type"`  // "" = WhisperJAV default; e.g. "int8_float32" for CPU
+	CPUThreads     int    `mapstructure:"cpu_threads"`   // 0 = WhisperJAV default (1); set to vCPU count for full utilisation
 	FFmpegCacheDir string `mapstructure:"ffmpeg_cache_dir"`
 	KeepAudio      bool   `mapstructure:"keep_audio"`
 	KeepAudioMax   int    `mapstructure:"keep_audio_max"`
@@ -78,8 +83,15 @@ type SubtitleConfig struct {
 type TranslateConfig struct {
 	TargetLanguage string       `mapstructure:"target_language"`
 	Provider       string       `mapstructure:"provider"`
+	MaxTokens      int          `mapstructure:"max_tokens"` // LLM output token cap; 0 = use API default
 	OpenAI         OpenAIConfig `mapstructure:"openai"`
 	Ollama         OllamaConfig `mapstructure:"ollama"`
+	DeepLX         DeepLXConfig `mapstructure:"deeplx"`
+}
+
+type DeepLXConfig struct {
+	BaseURL    string `mapstructure:"base_url"`
+	SourceLang string `mapstructure:"source_lang"` // e.g. "JA"; "" = auto-detect
 }
 
 type OpenAIConfig struct {
@@ -97,6 +109,13 @@ type WebhookConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	Port    int    `mapstructure:"port"`
 	Secret  string `mapstructure:"secret"`
+}
+
+// NotifyConfig controls outgoing webhook notifications fired after translate completes.
+type NotifyConfig struct {
+	Enabled bool              `mapstructure:"enabled"`
+	URL     string            `mapstructure:"url"`     // POST target
+	Headers map[string]string `mapstructure:"headers"` // optional extra headers
 }
 
 type LogConfig struct {
@@ -130,6 +149,9 @@ func LoadFile(path string) (*Config, error) {
 // causes viper to overwrite the entire sub-struct, zeroing fields not present in YAML.
 func ApplySubDefaults(cfg *Config) {
 	d := Default()
+	if cfg.Subtitle.PythonBin == "" {
+		cfg.Subtitle.PythonBin = d.Subtitle.PythonBin
+	}
 	if cfg.Subtitle.Model == "" {
 		cfg.Subtitle.Model = d.Subtitle.Model
 	}
@@ -165,6 +187,12 @@ func ApplySubDefaults(cfg *Config) {
 	}
 	if cfg.Translate.Provider == "" {
 		cfg.Translate.Provider = d.Translate.Provider
+	}
+	if cfg.Translate.DeepLX.BaseURL == "" {
+		cfg.Translate.DeepLX.BaseURL = d.Translate.DeepLX.BaseURL
+	}
+	if cfg.Translate.DeepLX.SourceLang == "" {
+		cfg.Translate.DeepLX.SourceLang = d.Translate.DeepLX.SourceLang
 	}
 	if cfg.Translate.OpenAI.BaseURL == "" {
 		cfg.Translate.OpenAI.BaseURL = d.Translate.OpenAI.BaseURL
@@ -223,16 +251,22 @@ func Default() *Config {
 			Cover:            true,
 		},
 		Subtitle: SubtitleConfig{
+			PythonBin:    "python3",
 			Model:        "medium",
 			Language:     "ja",
+			Sensitivity:  "",
+			ComputeType:  "",
+			CPUThreads:   0,
 			KeepAudio:    false,
 			KeepAudioMax: 5,
 		},
 		Translate: TranslateConfig{
 			TargetLanguage: "zh",
 			Provider:       "openai",
+			MaxTokens:      0,
 			OpenAI:         OpenAIConfig{BaseURL: "https://api.openai.com/v1", Model: "gpt-4o-mini"},
 			Ollama:         OllamaConfig{BaseURL: "http://localhost:11434", Model: "qwen2.5:7b"},
+			DeepLX:         DeepLXConfig{BaseURL: "http://localhost:1188", SourceLang: "JA"},
 		},
 		Webhook: WebhookConfig{Port: 8080},
 		Log:     LogConfig{Level: "debug", Format: "text"},

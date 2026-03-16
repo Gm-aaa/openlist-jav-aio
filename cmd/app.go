@@ -15,6 +15,7 @@ import (
 	"github.com/openlist-jav-aio/jav-aio/internal/ffmpeg"
 	"github.com/openlist-jav-aio/jav-aio/internal/llm"
 	"github.com/openlist-jav-aio/jav-aio/internal/logger"
+	"github.com/openlist-jav-aio/jav-aio/internal/notify"
 	"github.com/openlist-jav-aio/jav-aio/internal/openlist"
 	"github.com/openlist-jav-aio/jav-aio/internal/pipeline"
 	"github.com/openlist-jav-aio/jav-aio/internal/scraper"
@@ -99,7 +100,17 @@ func buildApp() (*App, error) {
 	}
 
 	// whisper runner
-	whisperRunner := whisper.NewRunner(cfg.Subtitle.WhisperBin, cfg.Subtitle.Model, cfg.Subtitle.Language, log)
+	whisperRunner := whisper.NewRunner(
+		cfg.Subtitle.WhisperBin,
+		cfg.Subtitle.Model,
+		cfg.Subtitle.Language,
+		whisper.RunnerOptions{
+			Sensitivity: cfg.Subtitle.Sensitivity,
+			ComputeType: cfg.Subtitle.ComputeType,
+			CPUThreads:  cfg.Subtitle.CPUThreads,
+		},
+		log,
+	)
 
 	// subtitle processor
 	subtitleProc := subtitle.NewProcessor(
@@ -111,13 +122,21 @@ func buildApp() (*App, error) {
 		log,
 	)
 
-	// LLM provider
+	// LLM / translation provider
 	var llmProvider llm.Provider
 	switch cfg.Translate.Provider {
+	case "deeplx":
+		llmProvider = llm.NewDeepLXProvider(cfg.Translate.DeepLX.BaseURL, cfg.Translate.DeepLX.SourceLang, log)
 	case "ollama":
 		llmProvider = llm.NewOllamaProvider(cfg.Translate.Ollama.BaseURL, cfg.Translate.Ollama.Model, log)
-	default:
-		llmProvider = llm.NewOpenAIProvider(cfg.Translate.OpenAI.BaseURL, cfg.Translate.OpenAI.APIKey, cfg.Translate.OpenAI.Model, log)
+	default: // "openai" and any OpenAI-compatible provider
+		llmProvider = llm.NewOpenAIProvider(
+			cfg.Translate.OpenAI.BaseURL,
+			cfg.Translate.OpenAI.APIKey,
+			cfg.Translate.OpenAI.Model,
+			cfg.Translate.MaxTokens,
+			log,
+		)
 	}
 
 	coverEnabled := cfg.Scraper.Cover
@@ -151,6 +170,14 @@ func buildApp() (*App, error) {
 		return os.WriteFile(destPath, []byte(translated), 0644)
 	}
 
+	var notifyFunc func(ctx context.Context, task pipeline.Task, srtPath string)
+	if cfg.Notify.Enabled && cfg.Notify.URL != "" {
+		notifier := notify.New(cfg.Notify.URL, cfg.Notify.Headers, log)
+		notifyFunc = func(ctx context.Context, task pipeline.Task, srtPath string) {
+			notifier.Send(ctx, task.JavID, task.OpenListPath, srtPath)
+		}
+	}
+
 	pl := pipeline.New(pipeline.Deps{
 		DB:    db,
 		Steps: cfg.Pipeline.Steps,
@@ -160,6 +187,7 @@ func buildApp() (*App, error) {
 		SubtitleFunc:  subtitleFunc,
 		TranslateFunc: translateFunc,
 		TargetLang:    cfg.Translate.TargetLanguage,
+		NotifyFunc:    notifyFunc,
 	})
 
 	minFileBytes, err := config.ParseSize(cfg.OpenList.MinFileSize)

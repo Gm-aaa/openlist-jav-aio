@@ -27,6 +27,8 @@ type Deps struct {
 	SubtitleFunc  func(ctx context.Context, videoURL, outDir, javID string) error
 	TranslateFunc func(ctx context.Context, srtPath, outDir, javID, lang string) error
 	TargetLang    string
+	// NotifyFunc is called after translate completes successfully (optional).
+	NotifyFunc func(ctx context.Context, task Task, srtPath string)
 }
 
 type Pipeline struct {
@@ -80,8 +82,14 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 		}
 	}
 
-	// Step: Subtitle
+	// Pre-populate srtPath if subtitle was already completed in a prior run,
+	// so the translate step is not skipped due to an empty srtPath.
 	var srtPath string
+	if rec.SubtitleDone {
+		srtPath = filepath.Join(task.OutDir, task.JavID+".srt")
+	}
+
+	// Step: Subtitle
 	if d.Steps.Subtitle && !rec.SubtitleDone && d.SubtitleFunc != nil {
 		log.Debug("step start", "step", "subtitle")
 		if err := d.SubtitleFunc(ctx, task.FileURL, task.OutDir, task.JavID); err != nil {
@@ -107,6 +115,9 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 			rec.TranslateDone = true
 			d.DB.Upsert(rec)
 			log.Debug("step done", "step", "translate")
+			if d.NotifyFunc != nil {
+				d.NotifyFunc(ctx, task, srtPath)
+			}
 		}
 	}
 

@@ -28,7 +28,7 @@ func TestOpenAIProvider_Translate(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := llm.NewOpenAIProvider(srv.URL, "test-key", "gpt-4o-mini", nil)
+	p := llm.NewOpenAIProvider(srv.URL, "test-key", "gpt-4o-mini", 0, nil)
 	result, err := p.Translate(context.Background(),
 		"1\n00:00:01,000 --> 00:00:02,000\nHello\n", "zh")
 	if err != nil {

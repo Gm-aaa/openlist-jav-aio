@@ -38,24 +38,68 @@ import (
 	"time"
 )
 
+// resolveBin returns the absolute path of bin.
+// If bin is already an absolute path, os.Stat is used to verify existence.
+// Otherwise exec.LookPath is used to search $PATH, matching exec.Command behaviour.
+func resolveBin(bin string) (string, error) {
+	if filepath.IsAbs(bin) {
+		if _, err := os.Stat(bin); err != nil {
+			return "", fmt.Errorf("binary not found at %s: %w", bin, err)
+		}
+		return bin, nil
+	}
+	resolved, err := exec.LookPath(bin)
+	if err != nil {
+		return "", fmt.Errorf("binary %q not found in PATH: %w", bin, err)
+	}
+	return resolved, nil
+}
+
 // Runner wraps the WhisperJAV CLI binary.
 type Runner struct {
-	bin      string
-	model    string
-	language string
-	log      *slog.Logger
+	bin         string
+	model       string
+	language    string
+	sensitivity string // "" = WhisperJAV default; "aggressive" / "conservative" / "balanced"
+	computeType string // "" = WhisperJAV default; e.g. "int8_float32" for CPU
+	cpuThreads  int    // 0 = WhisperJAV default (1 core); set to vCPU count for full utilisation
+	log         *slog.Logger
+}
+
+// RunnerOptions holds optional tuning parameters for NewRunner.
+type RunnerOptions struct {
+	// Sensitivity controls WhisperJAV's hallucination-filter aggressiveness.
+	// Valid values: "aggressive", "conservative", "balanced". "" = WhisperJAV default.
+	Sensitivity string
+	// ComputeType sets the CTranslate2 quantisation mode, e.g. "int8_float32".
+	// "" = WhisperJAV default (int8 on CPU). "int8_float32" gives the best
+	// CPU speed/accuracy balance.
+	ComputeType string
+	// CPUThreads is the number of CPU threads passed to CTranslate2 via
+	// --cpu-threads. 0 = WhisperJAV default (1). Set to your vCPU count to
+	// use all available cores.
+	CPUThreads int
 }
 
 // NewRunner creates a Runner.
 //   - bin:      absolute path (or name on $PATH) of the whisperjav executable.
-//   - model:    Whisper model name, e.g. "medium", "large-v3", "litagin/anime-whisper".
+//   - model:    Whisper model name, e.g. "large-v3", "litagin/anime-whisper".
 //   - language: BCP-47 code, e.g. "ja".
+//   - opts:     optional tuning parameters; zero value uses WhisperJAV defaults.
 //   - log:      structured logger; uses slog.Default() when nil.
-func NewRunner(bin, model, language string, log *slog.Logger) *Runner {
+func NewRunner(bin, model, language string, opts RunnerOptions, log *slog.Logger) *Runner {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Runner{bin: bin, model: model, language: language, log: log}
+	return &Runner{
+		bin:         bin,
+		model:       model,
+		language:    language,
+		sensitivity: opts.Sensitivity,
+		computeType: opts.ComputeType,
+		cpuThreads:  opts.CPUThreads,
+		log:         log,
+	}
 }
 
 // SRTPath returns the expected output SRT path for a given javID inside outDir.
@@ -71,9 +115,10 @@ func SRTPath(outDir, javID string) string {
 //
 // ctx may be nil; a background context is used in that case.
 func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string) (string, error) {
-	// Verify the binary exists before attempting execution.
-	if _, err := os.Stat(r.bin); err != nil {
-		return "", fmt.Errorf("whisperJAV binary not found at %s: %w", r.bin, err)
+	// Verify the binary is resolvable before attempting execution.
+	// Handles both absolute paths and PATH-based names (e.g. "whisperjav" in Docker).
+	if _, err := resolveBin(r.bin); err != nil {
+		return "", fmt.Errorf("whisperJAV: %w", err)
 	}
 
 	if err := os.MkdirAll(outDir, 0755); err != nil {
@@ -103,9 +148,18 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		"--language", languageName(r.language),
 		"--output-format", "srt",
 		"--output-dir", tmpDir,
-		"--no-signature",   // disable the WhisperJAV attribution URL appended at end of SRT
-		"--no-progress",    // suppress progress bars in captured stderr
+		"--no-signature",    // disable the WhisperJAV attribution URL appended at end of SRT
+		"--no-progress",     // suppress progress bars in captured stderr
 		"--accept-cpu-mode", // suppress interactive GPU warning when no CUDA is available
+	}
+	if r.sensitivity != "" {
+		args = append(args, "--sensitivity", r.sensitivity)
+	}
+	if r.computeType != "" {
+		args = append(args, "--compute-type", r.computeType)
+	}
+	if r.cpuThreads > 0 {
+		args = append(args, "--cpu-threads", fmt.Sprintf("%d", r.cpuThreads))
 	}
 
 	// Use a non-nil context; exec.CommandContext requires one.

@@ -9,7 +9,7 @@ import (
 )
 
 func TestRunner_MissingBin(t *testing.T) {
-	r := whisper.NewRunner("/nonexistent/whisperJAV", "medium", "ja", nil)
+	r := whisper.NewRunner("/nonexistent/whisperJAV", "medium", "ja", whisper.RunnerOptions{}, nil)
 	_, err := r.Transcribe(nil, "/some/audio.aac", t.TempDir(), "ABC-123")
 	if err == nil {
 		t.Error("expected error for missing binary")
@@ -26,7 +26,7 @@ func TestRunner_SRTPath(t *testing.T) {
 }
 
 func TestNewRunner_DefaultLogger(t *testing.T) {
-	r := whisper.NewRunner("whisperjav", "large-v3", "ja", nil)
+	r := whisper.NewRunner("whisperjav", "large-v3", "ja", whisper.RunnerOptions{}, nil)
 	if r == nil {
 		t.Error("expected non-nil runner")
 	}

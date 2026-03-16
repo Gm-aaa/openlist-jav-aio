@@ -1,8 +1,8 @@
 package logger_test
 
 import (
-	"testing"
 	"github.com/openlist-jav-aio/jav-aio/internal/logger"
+	"testing"
 )
 
 func TestNewLogger_Debug(t *testing.T) {

@@ -1,0 +1,27 @@
+# 用户配置（含密钥，不打入镜像）
+config.yaml
+
+# 编译产物
+jav-aio
+jav-aio.exe
+
+# 运行时数据
+media/
+mid/
+*.db
+*.log
+
+# Python/Go 本地缓存
+.venv/
+# 注意：assets/ 不能忽略，Go embed 需要它来内嵌 ffmpeg 二进制
+/tmp/
+
+# 开发工具
+.git/
+.claude/
+docs/
+scripts/
+
+# IDE
+.vscode/
+.idea/

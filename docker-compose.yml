@@ -7,10 +7,9 @@ services:
     volumes:
       # 配置文件（只读，路径已固定为容器内路径）
       - ./config.docker.yaml:/app/config.yaml:ro
-      # 输出目录（对应 output.base_dir: /app/data/output）
-      - ./output:/app/data/output
-      # 状态数据库（对应 state.db_path: /app/data/jav-aio.db）
-      - ./jav-aio.db:/app/data/jav-aio.db
+      # 持久化数据目录（输出文件 + SQLite 数据库 + 音频缓存）
+      # 对应容器内 /app/data/（含 output/、jav-aio.db、audio/）
+      - ./data:/app/data
       # Whisper 模型缓存（避免重建容器后重新下载，约 1.5~3GB）
       - whisper-models:/app/hf-cache
 

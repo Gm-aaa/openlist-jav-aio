@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # 显式传入 GOARCH，确保交叉编译时生成正确平台的二进制
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /jav-aio ./cmd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /jav-aio .
 
 # =============================================================================
 # Stage 2 – Python + WhisperJAV runtime

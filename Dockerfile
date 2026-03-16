@@ -39,9 +39,9 @@ FROM python:3.11-slim-bookworm
 #   /app/config.yaml      —— 运行时挂载（只读）
 RUN mkdir -p /app/ffmpeg /app/data/output /app/data/audio
 
-# 安装运行时依赖：
+# 安装运行时依赖并在同一层清理，减小镜像体积：
 #   - ffmpeg：字幕检测、音频提取（findSystemFFmpeg 优先使用系统版本）
-#   - git：pip install git+https:// 需要
+#   - git：pip install git+https:// 需要（安装完后删除）
 #   - libgomp1：ctranslate2 运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -49,17 +49,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 CPU-only PyTorch（单独一层，cache 命中率高）
+# 1) 先装 CPU-only PyTorch（~280MB）。必须在 WhisperJAV 之前，
+#    否则 openai-whisper 依赖会从默认 index 拉完整 GPU 版（~800MB）。
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-# 安装 faster-whisper 及 HuggingFace 工具库
-RUN pip install --no-cache-dir faster-whisper huggingface_hub
+# 2) 安装 WhisperJAV。它的核心依赖包含 openai-whisper（~100MB，且我们只用
+#    faster-whisper），用 --no-deps 跳过自动依赖解析，然后只安装实际需要的包。
+RUN pip install --no-cache-dir --no-deps \
+        "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
 
-# 从 GitHub 安装 WhisperJAV（PyPI 上不可用）。
-# WhisperJAV 是标准 Python 包（pyproject.toml），pip install 后 whisperjav 命令
-# 会被安装到 /usr/local/bin/whisperjav。
-# 过滤掉 requirements.txt 中的 torch 行（已通过 CPU-only index 安装，避免版本冲突）
-RUN pip install --no-cache-dir "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
+# 3) 手动安装 WhisperJAV 运行时实际需要的依赖（跳过 openai-whisper）。
+#    faster-whisper 提供语音识别；其余为 WhisperJAV CLI 必需的轻量包。
+RUN pip install --no-cache-dir \
+        faster-whisper \
+        huggingface_hub \
+        ffmpeg-python \
+        pysrt \
+        srt \
+        tqdm \
+        colorama \
+        requests \
+        regex \
+        more-itertools \
+        pydantic \
+        PyYAML \
+        jsonschema \
+        stable-ts
+
+# 4) 清理构建工具，减小镜像体积
+RUN apt-get purge -y git && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 # 复制编译好的二进制并确保可执行权限
 COPY --from=builder /jav-aio /usr/local/bin/jav-aio

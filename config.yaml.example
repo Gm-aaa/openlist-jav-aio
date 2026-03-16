@@ -42,12 +42,15 @@ openlist:
 output:
   # 处理结果根目录（必填）
   # 每部影片将在此目录下创建以 JAV ID 命名的子目录
-  # 示例结构：/media/jav/ABC-123/ABC-123.strm
-  #                              ABC-123.nfo
-  #                              ABC-123.jpg
-  #                              ABC-123.srt
-  #                              ABC-123.zh.srt
-  base_dir: "/media/jav"
+  # 示例结构：/app/data/output/ABC-123/ABC-123.strm
+  #                                     ABC-123.nfo
+  #                                     ABC-123.jpg
+  #                                     ABC-123.srt
+  #                                     ABC-123.zh.srt
+  #
+  # Docker 部署：保持 /app/data/output（已通过 volume 挂载到宿主机 ./output）
+  # 本地运行：改为本机路径，如 "./media/jav" 或 "/mnt/nas/jav"
+  base_dir: "/app/data/output"
 
 # 流水线配置
 pipeline:
@@ -97,9 +100,12 @@ scraper:
 subtitle:
   # whisperJAV 可执行文件路径
   # 项目地址：https://github.com/meizhong986/WhisperJAV
-  # 示例："/usr/local/bin/whisperJAV" 或 "python /opt/WhisperJAV/whisperJAV.py"
+  #
+  # Docker 部署：保持 /app/bin/whisperjav（镜像内固定路径）
+  # 本地运行：改为实际安装路径，如 "/usr/local/bin/whisperjav"
+  #           或直接填命令名 "whisperjav"（需在 $PATH 中）
   # 留空则在没有内嵌/外挂字幕时跳过语音识别
-  whisper_bin: "/usr/local/bin/whisperJAV"
+  whisper_bin: "/app/bin/whisperjav"
 
   # Python 可执行文件，用于 `jav-aio model download` 命令下载模型
   # 需安装 huggingface_hub：pip install huggingface_hub
@@ -143,8 +149,10 @@ subtitle:
 
   # ffmpeg 可执行文件缓存目录
   # 程序内嵌了 ffmpeg，首次运行时解压到此目录
-  # 留空使用系统默认缓存目录（推荐）
-  ffmpeg_cache_dir: ""
+  #
+  # Docker 部署：保持 /app/ffmpeg（容器内固定路径，避免每次重启重新解压）
+  # 本地运行：留空使用系统默认缓存目录（推荐）
+  ffmpeg_cache_dir: "/app/ffmpeg"
 
   # 是否保留从视频中提取的音频文件（调试用）
   keep_audio: false
@@ -153,8 +161,10 @@ subtitle:
   keep_audio_max: 5
 
   # 音频文件存放目录（keep_audio=true 时生效）
-  # 留空使用系统临时目录
-  audio_dir: ""
+  #
+  # Docker 部署：保持 /app/data/audio
+  # 本地运行：留空使用系统临时目录
+  audio_dir: "/app/data/audio"
 
 # 字幕翻译配置
 translate:
@@ -257,5 +267,7 @@ log:
 state:
   # SQLite 数据库文件路径，记录每个文件每个步骤的完成状态
   # 程序重启后会从数据库恢复未完成的任务
-  # 示例："/var/lib/jav-aio/state.db"
-  db_path: "./jav-aio.db"
+  #
+  # Docker 部署：保持 /app/data/jav-aio.db（已通过 volume 挂载到宿主机 ./jav-aio.db）
+  # 本地运行：改为本机路径，如 "./jav-aio.db"
+  db_path: "/app/data/jav-aio.db"

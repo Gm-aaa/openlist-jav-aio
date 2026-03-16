@@ -1,11 +1,11 @@
 services:
   jav-aio:
-    build: .
+    image: ghcr.io/gm-aaa/openlist-jav-aio:latest
     container_name: jav-aio
     restart: unless-stopped
 
     volumes:
-      # 配置文件（只读，使用 Docker 专用配置，路径已固定）
+      # 配置文件（只读，路径已固定为容器内路径）
       - ./config.docker.yaml:/app/config.yaml:ro
       # 输出目录（对应 output.base_dir: /app/data/output）
       - ./output:/app/data/output

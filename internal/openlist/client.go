@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -174,13 +173,19 @@ func (c *Client) GetFileURL(ctx context.Context, filePath, sign string) (string,
 	return fileURL, nil
 }
 
-// encodePath percent-encodes each segment of a slash-separated path,
-// preserving the slash separators. This handles filenames with spaces,
-// CJK characters, or other special characters.
+// encodePath percent-encodes only spaces and non-ASCII characters (e.g. CJK)
+// in each segment of a slash-separated path. Characters like @, -, ., ~ that
+// are safe in AList paths are preserved as-is, because AList does not decode
+// standard percent-encoding for path matching.
 func encodePath(p string) string {
-	segments := strings.Split(p, "/")
-	for i, seg := range segments {
-		segments[i] = url.PathEscape(seg)
+	var sb strings.Builder
+	sb.Grow(len(p) * 2)
+	for _, b := range []byte(p) {
+		if b > 127 || b == ' ' {
+			fmt.Fprintf(&sb, "%%%02X", b)
+		} else {
+			sb.WriteByte(b)
+		}
 	}
-	return strings.Join(segments, "/")
+	return sb.String()
 }

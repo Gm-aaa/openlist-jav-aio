@@ -49,9 +49,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 1) 先装 CPU-only PyTorch（~280MB）。必须在 WhisperJAV 之前，
-#    否则 openai-whisper 依赖会从默认 index 拉完整 GPU 版（~800MB）。
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# 1) 先装 CPU-only PyTorch + torchaudio。必须在其他包之前从 CPU index 安装，
+#    否则 stable-ts 等依赖会从默认 index 拉 GPU 版（需要 libtorch_cuda.so）。
+RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # 2) 安装 WhisperJAV。它的核心依赖包含 openai-whisper（~100MB，且我们只用
 #    faster-whisper），用 --no-deps 跳过自动依赖解析，然后只安装实际需要的包。

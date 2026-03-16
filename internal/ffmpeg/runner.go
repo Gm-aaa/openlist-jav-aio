@@ -74,26 +74,53 @@ func (r *Runner) ExtractSubtitle(ctx context.Context, videoURL, destSRT string) 
 // Streams directly from remote URL — does NOT download the video.
 // Writes to a temp file first and renames on success for crash safety.
 func (r *Runner) ExtractAudio(ctx context.Context, videoURL, destAudio string) error {
-	r.log.Debug("ffmpeg extract audio from remote", "url", videoURL, "dest", destAudio)
+	r.log.Info("ffmpeg extracting audio from remote (this may take a while for large files)",
+		"dest", destAudio)
 	start := time.Now()
 
 	tmpFile := destAudio + ".tmp"
-	_, err := r.run(ctx, "ffmpeg",
+
+	path := BinPath(r.binDir, "ffmpeg")
+	cmd := exec.CommandContext(ctx, path,
 		"-user_agent", httpUserAgent,
 		"-i", videoURL,
 		"-vn",
 		"-acodec", "copy",
 		"-y", tmpFile,
 	)
-	if err != nil {
-		os.Remove(tmpFile)
-		return fmt.Errorf("extract audio: %w", err)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start ffmpeg: %w", err)
 	}
-	if err := atomicRename(tmpFile, destAudio); err != nil {
-		return err
+
+	// Log progress periodically so the user knows ffmpeg is still working.
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case err := <-done:
+			if err != nil {
+				os.Remove(tmpFile)
+				return fmt.Errorf("extract audio: %w\nstderr: %s", err, stderr.String())
+			}
+			if err := atomicRename(tmpFile, destAudio); err != nil {
+				return err
+			}
+			r.log.Info("audio extracted", "dest", destAudio,
+				"size_mb", fileSizeMB(destAudio),
+				"duration_s", int(time.Since(start).Seconds()))
+			return nil
+		case <-ticker.C:
+			r.log.Info("ffmpeg still extracting audio...",
+				"elapsed_s", int(time.Since(start).Seconds()),
+				"size_mb", fileSizeMB(tmpFile))
+		}
 	}
-	r.log.Debug("audio extracted", "dest", destAudio, "duration_ms", time.Since(start).Milliseconds())
-	return nil
 }
 
 // atomicRename moves src to dst. Falls back to read+write+remove if rename
@@ -110,6 +137,15 @@ func atomicRename(src, dst string) error {
 		os.Remove(src)
 	}
 	return nil
+}
+
+// fileSizeMB returns the file size in MB, or 0 if the file cannot be read.
+func fileSizeMB(path string) float64 {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return float64(fi.Size()) / (1024 * 1024)
 }
 
 func (r *Runner) run(ctx context.Context, bin string, args ...string) (string, error) {

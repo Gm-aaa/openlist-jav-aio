@@ -7,9 +7,17 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
+
+// tmpName returns a temporary filename that preserves the original extension
+// so ffmpeg can infer the output format. e.g. "foo.aac" → "foo.tmp.aac".
+func tmpName(dest string) string {
+	ext := filepath.Ext(dest)
+	return strings.TrimSuffix(dest, ext) + ".tmp" + ext
+}
 
 // httpUserAgent is sent to remote HTTP servers when reading video/audio streams.
 // 115 CDN rejects ffmpeg's default "Lavf/x.x.x" user-agent with 403; using
@@ -55,7 +63,7 @@ func (r *Runner) HasEmbeddedSubtitles(ctx context.Context, videoURL string) (boo
 func (r *Runner) ExtractSubtitle(ctx context.Context, videoURL, destSRT string) error {
 	r.log.Debug("ffmpeg extract subtitle", "url", videoURL, "dest", destSRT)
 
-	tmpFile := destSRT + ".tmp"
+	tmpFile := tmpName(destSRT)
 	_, err := r.run(ctx, "ffmpeg",
 		"-user_agent", httpUserAgent,
 		"-i", videoURL,
@@ -78,7 +86,7 @@ func (r *Runner) ExtractAudio(ctx context.Context, videoURL, destAudio string) e
 		"dest", destAudio)
 	start := time.Now()
 
-	tmpFile := destAudio + ".tmp"
+	tmpFile := tmpName(destAudio)
 
 	path := BinPath(r.binDir, "ffmpeg")
 	cmd := exec.CommandContext(ctx, path,

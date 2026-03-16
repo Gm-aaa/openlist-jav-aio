@@ -3,6 +3,10 @@
 # =============================================================================
 FROM golang:1.26-bookworm AS builder
 
+# BuildKit 在多平台构建时自动设置 TARGETARCH（amd64 / arm64 等）
+# 必须声明后才能在 RUN 中使用
+ARG TARGETARCH
+
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -22,7 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && touch internal/ffmpeg/assets/windows_amd64/ffprobe.exe \
     && rm -rf /var/lib/apt/lists/*
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /jav-aio ./cmd
+# 显式传入 GOARCH，确保交叉编译时生成正确平台的二进制
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /jav-aio ./cmd
 
 # =============================================================================
 # Stage 2 – Python + WhisperJAV runtime
@@ -59,7 +64,7 @@ RUN git clone --depth=1 https://github.com/meizhong986/WhisperJAV.git /opt/Whisp
        > /app/bin/whisperjav \
     && chmod +x /app/bin/whisperjav
 
-# 复制编译好的二进制（内嵌了 ffmpeg linux_amd64）并确保可执行权限
+# 复制编译好的二进制并确保可执行权限
 COPY --from=builder /jav-aio /usr/local/bin/jav-aio
 RUN chmod +x /usr/local/bin/jav-aio
 

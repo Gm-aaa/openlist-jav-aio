@@ -43,8 +43,12 @@ FROM python:3.11-slim-bookworm
 #   /app/config.yaml      —— 运行时挂载（只读）
 RUN mkdir -p /app/bin /app/ffmpeg /app/data/output /app/data/audio
 
-# 安装 git（克隆 WhisperJAV 源码需要）和 libgomp1（ctranslate2 运行时依赖）
+# 安装运行时依赖：
+#   - ffmpeg：内嵌的 ffmpeg/ffprobe 为动态链接，需要 libavdevice 等共享库
+#   - git：克隆 WhisperJAV 源码
+#   - libgomp1：ctranslate2 运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg \
         git \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*

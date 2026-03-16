@@ -49,35 +49,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 1) 先装 CPU-only PyTorch + torchaudio。必须在其他包之前从 CPU index 安装，
-#    否则 stable-ts 等依赖会从默认 index 拉 GPU 版（需要 libtorch_cuda.so）。
+# 1) 先装 CPU-only PyTorch + torchaudio。必须在 WhisperJAV 之前从 CPU index 安装，
+#    否则 openai-whisper / stable-ts 依赖会从默认 index 拉 GPU 版（需 libtorch_cuda.so）。
+#    pip 发现 torch/torchaudio 已满足版本要求后不会重复安装。
 RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# 2) 安装 WhisperJAV。它的核心依赖包含 openai-whisper（~100MB，且我们只用
-#    faster-whisper），用 --no-deps 跳过自动依赖解析，然后只安装实际需要的包。
-RUN pip install --no-cache-dir --no-deps \
-        "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
-
-# 3) 手动安装 WhisperJAV 运行时实际需要的依赖（跳过 openai-whisper）。
-#    stable-ts 提供语音识别（内部调用 faster-whisper）；soundfile/librosa 用于
-#    音频加载；其余为 WhisperJAV CLI 必需的轻量包。
-#    注意：ffmpeg-python 不需要，WhisperJAV 直接通过 subprocess 调用系统 ffmpeg。
-RUN pip install --no-cache-dir \
-        stable-ts \
-        faster-whisper \
-        huggingface_hub \
-        soundfile \
-        librosa \
-        pysrt \
-        srt \
-        tqdm \
-        colorama \
-        requests \
-        regex \
-        more-itertools \
-        pydantic \
-        PyYAML \
-        jsonschema
+# 2) 正常安装 WhisperJAV 及全部依赖（含 openai-whisper，多 ~100MB 但保证不漏包）。
+RUN pip install --no-cache-dir "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
 
 # 4) 清理构建工具，减小镜像体积
 RUN apt-get purge -y git && apt-get autoremove -y \

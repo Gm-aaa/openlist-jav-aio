@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -27,6 +28,13 @@ func Setup(cacheDir string) (dir string, err error) {
 }
 
 func setup(cacheDir string) (string, error) {
+	// 优先使用系统安装的 ffmpeg（Docker 镜像中通过 apt 安装）。
+	// 内嵌的 ffmpeg 是从 Debian 构建阶段拷贝的动态链接版本，
+	// 解压到运行时容器后可能缺少共享库；而系统 apt 安装的版本自带依赖。
+	if systemDir := findSystemFFmpeg(); systemDir != "" {
+		return systemDir, nil
+	}
+
 	if cacheDir == "" {
 		base, err := os.UserCacheDir()
 		if err != nil {
@@ -50,6 +58,19 @@ func setup(cacheDir string) (string, error) {
 		}
 	}
 	return cacheDir, nil
+}
+
+// findSystemFFmpeg checks if ffmpeg and ffprobe are available in PATH.
+// Returns the directory containing them, or "" if not found.
+func findSystemFFmpeg() string {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return ""
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		return ""
+	}
+	return filepath.Dir(ffmpegPath)
 }
 
 func platformFS() (embed.FS, string, []string) {

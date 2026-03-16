@@ -1,10 +1,10 @@
 package whisper
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -50,15 +50,13 @@ func DownloadModel(ctx context.Context, pythonBin, model string, log *slog.Logge
 		repo,
 	)
 	cmd := exec.CommandContext(ctx, pythonBin, "-c", script)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Stream stdout/stderr to the terminal so the user sees the download
+	// progress bar (huggingface_hub prints it to stderr).
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf(
-			"download model %q (repo %s): %w\nstdout: %s\nstderr: %s",
-			model, repo, err, stdout.String(), stderr.String(),
-		)
+		return fmt.Errorf("download model %q (repo %s): %w", model, repo, err)
 	}
 	log.Info("model download complete", "model", model, "repo", repo)
 	return nil

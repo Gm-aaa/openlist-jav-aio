@@ -101,6 +101,9 @@ func (p *Processor) Process(ctx context.Context, videoURL, outDir, javID string)
 	}
 
 	// Tier 2: embedded subtitle stream in the remote video.
+	if p.ffmpeg == nil {
+		return "", fmt.Errorf("ffmpeg runner not available; cannot check/extract subtitles")
+	}
 	hasSub, err := p.ffmpeg.HasEmbeddedSubtitles(ctx, videoURL)
 	if err != nil {
 		p.log.Warn("ffprobe subtitle check failed, proceeding to whisper",

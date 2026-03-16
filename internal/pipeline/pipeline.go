@@ -63,6 +63,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 			d.DB.Upsert(rec)
 		} else {
 			rec.ScrapeDone = true
+			rec.ErrorMsg = ""
 			d.DB.Upsert(rec)
 			log.Debug("step done", "step", "scrape")
 		}
@@ -77,6 +78,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 			d.DB.Upsert(rec)
 		} else {
 			rec.StrmDone = true
+			rec.ErrorMsg = ""
 			d.DB.Upsert(rec)
 			log.Debug("step done", "step", "strm")
 		}
@@ -98,6 +100,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 			d.DB.Upsert(rec)
 		} else {
 			rec.SubtitleDone = true
+			rec.ErrorMsg = ""
 			srtPath = filepath.Join(task.OutDir, task.JavID+".srt")
 			d.DB.Upsert(rec)
 			log.Debug("step done", "step", "subtitle")
@@ -113,6 +116,7 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 			d.DB.Upsert(rec)
 		} else {
 			rec.TranslateDone = true
+			rec.ErrorMsg = ""
 			d.DB.Upsert(rec)
 			log.Debug("step done", "step", "translate")
 			if d.NotifyFunc != nil {

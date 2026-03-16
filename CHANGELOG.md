@@ -4,6 +4,20 @@
 
 ---
 
+## [0.1.3] - 2026-03-16
+
+### 修复
+
+- **Dockerfile `go build ./cmd`** — `cmd/` 包声明为 `package cmd`（非 `package main`），`go build ./cmd` 生成的是归档文件（`.a`）而非 ELF 可执行二进制，导致容器内 `exec format error`；改为 `go build .` 从根目录 `main.go` 构建
+- **Dockerfile 多平台 GOARCH** — 多平台构建（amd64 + arm64）时未设置 `GOARCH`，Go 默认使用宿主机架构，导致 arm64 变体编译出错误架构二进制
+- **ffmpeg 动态链接缺库** — 内嵌的 ffmpeg 为构建阶段的动态链接版本，运行时缺少 `libavdevice.so.59` 等共享库（`exit status 127`）；新增 `findSystemFFmpeg()` 优先使用系统 apt 安装的 ffmpeg，仅在系统无 ffmpeg 时回退到内嵌解压（Windows / 本地开发）
+- **docker-compose 数据库挂载** — `./jav-aio.db:/app/data/jav-aio.db` 在宿主机文件不存在时被 Docker 创建为目录；改为挂载整个 `./data:/app/data`
+- **`whisper/download.go`** — `DownloadModel` 将 stdout/stderr 捕获到 buffer，用户看不到模型下载进度（1.5~3GB 等待无反馈）；改为直接输出到终端
+- **`pipeline/pipeline.go`** — 步骤失败后设置 `rec.ErrorMsg`，但重试成功后未清除，导致数据库残留过期错误信息
+- **`subtitle/subtitle.go`** — `Process` 方法缺少 `p.ffmpeg` nil 检查，ffmpeg 初始化失败时直接调用会 panic
+
+---
+
 ## [0.1.1] - 2026-03-16
 
 ### 修复

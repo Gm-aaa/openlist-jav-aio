@@ -51,8 +51,10 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 RUN pip install --no-cache-dir faster-whisper huggingface_hub
 
 # 从 GitHub 安装 WhisperJAV（PyPI 上不可用），并在固定路径创建 wrapper 脚本
+# 过滤掉 requirements.txt 中的 torch 行（已通过 CPU-only index 安装，避免版本冲突）
 RUN git clone --depth=1 https://github.com/meizhong986/WhisperJAV.git /opt/WhisperJAV \
-    && pip install --no-cache-dir -r /opt/WhisperJAV/requirements.txt \
+    && grep -iv "torch" /opt/WhisperJAV/requirements.txt \
+       | pip install --no-cache-dir -r /dev/stdin \
     && printf '#!/bin/sh\nexec python /opt/WhisperJAV/whisperjav.py "$@"\n' \
        > /app/bin/whisperjav \
     && chmod +x /app/bin/whisperjav

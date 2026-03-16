@@ -54,8 +54,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #    pip 发现 torch/torchaudio 已满足版本要求后不会重复安装。
 RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# 2) 正常安装 WhisperJAV 及全部依赖（含 openai-whisper，多 ~100MB 但保证不漏包）。
-RUN pip install --no-cache-dir "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
+# 2) 正常安装 WhisperJAV 及全部依赖。
+#    [cli] extras 包含 soundfile、librosa 等音频处理库，运行时核心模块需要。
+RUN pip install --no-cache-dir "whisperjav[cli] @ git+https://github.com/meizhong986/WhisperJAV.git"
 
 # 4) 清理构建工具，减小镜像体积
 RUN apt-get purge -y git && apt-get autoremove -y \

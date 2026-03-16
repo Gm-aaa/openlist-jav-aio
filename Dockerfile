@@ -59,8 +59,9 @@ RUN git clone --depth=1 https://github.com/meizhong986/WhisperJAV.git /opt/Whisp
        > /app/bin/whisperjav \
     && chmod +x /app/bin/whisperjav
 
-# 复制编译好的二进制（内嵌了 ffmpeg linux_amd64）
+# 复制编译好的二进制（内嵌了 ffmpeg linux_amd64）并确保可执行权限
 COPY --from=builder /jav-aio /usr/local/bin/jav-aio
+RUN chmod +x /usr/local/bin/jav-aio
 
 WORKDIR /app
 
@@ -69,5 +70,5 @@ ENV HF_HOME=/app/hf-cache
 
 EXPOSE 8080
 
-ENTRYPOINT ["jav-aio"]
+ENTRYPOINT ["/usr/local/bin/jav-aio"]
 CMD ["daemon", "--config", "/app/config.yaml"]

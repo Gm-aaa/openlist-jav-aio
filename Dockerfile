@@ -59,11 +59,15 @@ RUN pip install --no-cache-dir --no-deps \
         "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
 
 # 3) 手动安装 WhisperJAV 运行时实际需要的依赖（跳过 openai-whisper）。
-#    faster-whisper 提供语音识别；其余为 WhisperJAV CLI 必需的轻量包。
+#    stable-ts 提供语音识别（内部调用 faster-whisper）；soundfile/librosa 用于
+#    音频加载；其余为 WhisperJAV CLI 必需的轻量包。
+#    注意：ffmpeg-python 不需要，WhisperJAV 直接通过 subprocess 调用系统 ffmpeg。
 RUN pip install --no-cache-dir \
+        stable-ts \
         faster-whisper \
         huggingface_hub \
-        ffmpeg-python \
+        soundfile \
+        librosa \
         pysrt \
         srt \
         tqdm \
@@ -73,8 +77,7 @@ RUN pip install --no-cache-dir \
         more-itertools \
         pydantic \
         PyYAML \
-        jsonschema \
-        stable-ts
+        jsonschema
 
 # 4) 清理构建工具，减小镜像体积
 RUN apt-get purge -y git && apt-get autoremove -y \

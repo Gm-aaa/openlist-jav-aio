@@ -13,18 +13,15 @@ RUN go mod download
 
 COPY . .
 
-# embed.go 要求 assets/linux_amd64 和 assets/windows_amd64 在编译时同时存在。
-# CI checkout 时两个目录均因 .gitignore 缺失，需在此补全：
-#   - linux_amd64：从系统包获取真实 ffmpeg/ffprobe 二进制（运行时使用）
-#   - windows_amd64：创建空占位文件（仅满足 go:embed 编译要求，Linux 镜像不使用）
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
-    && mkdir -p internal/ffmpeg/assets/linux_amd64 \
-    && cp "$(which ffmpeg)"  internal/ffmpeg/assets/linux_amd64/ffmpeg \
-    && cp "$(which ffprobe)" internal/ffmpeg/assets/linux_amd64/ffprobe \
+# go:embed 要求 assets/linux_amd64 和 assets/windows_amd64 在编译时存在。
+# CI checkout 时两个目录均因 .gitignore 缺失，用空占位文件满足编译。
+# Docker 运行时使用系统 apt 安装的 ffmpeg（findSystemFFmpeg），不使用内嵌版本。
+RUN mkdir -p internal/ffmpeg/assets/linux_amd64 \
+    && touch internal/ffmpeg/assets/linux_amd64/ffmpeg \
+    && touch internal/ffmpeg/assets/linux_amd64/ffprobe \
     && mkdir -p internal/ffmpeg/assets/windows_amd64 \
     && touch internal/ffmpeg/assets/windows_amd64/ffmpeg.exe \
-    && touch internal/ffmpeg/assets/windows_amd64/ffprobe.exe \
-    && rm -rf /var/lib/apt/lists/*
+    && touch internal/ffmpeg/assets/windows_amd64/ffprobe.exe
 
 # 显式传入 GOARCH，确保交叉编译时生成正确平台的二进制
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /jav-aio .
@@ -36,7 +33,7 @@ FROM python:3.11-slim-bookworm
 
 # 固定目录结构（不依赖挂载路径）：
 #   /app/bin/whisperjav   —— WhisperJAV 可执行文件
-#   /app/ffmpeg/          —— 内嵌 ffmpeg 首次运行自动解压到此
+#   /app/ffmpeg/          —— ffmpeg_cache_dir（本镜像使用系统 ffmpeg，此目录闲置）
 #   /app/data/output/     —— 输出文件 (output.base_dir)
 #   /app/data/audio/      —— 音频缓存 (subtitle.audio_dir)
 #   /app/data/jav-aio.db  —— 状态数据库 (state.db_path)
@@ -44,7 +41,7 @@ FROM python:3.11-slim-bookworm
 RUN mkdir -p /app/bin /app/ffmpeg /app/data/output /app/data/audio
 
 # 安装运行时依赖：
-#   - ffmpeg：内嵌的 ffmpeg/ffprobe 为动态链接，需要 libavdevice 等共享库
+#   - ffmpeg：字幕检测、音频提取（findSystemFFmpeg 优先使用系统版本）
 #   - git：克隆 WhisperJAV 源码
 #   - libgomp1：ctranslate2 运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \

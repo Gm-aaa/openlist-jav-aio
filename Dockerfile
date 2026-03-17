@@ -39,15 +39,21 @@ FROM python:3.11-slim-bookworm
 #   /app/config.yaml      —— 运行时挂载（只读）
 RUN mkdir -p /app/ffmpeg /app/data/output /app/data/audio
 
-# 安装运行时依赖并在同一层清理，减小镜像体积：
+# 安装运行时依赖及构建工具（构建工具在 pip install 后清理）：
 #   - ffmpeg：字幕检测、音频提取（findSystemFFmpeg 优先使用系统版本）
-#   - git：pip install git+https:// 需要（安装完后删除）
+#   - git：pip install git+https:// 需要
+#   - gcc + portaudio19-dev：pyaudio（whisperjav[cli] 依赖）编译需要
 #   - libgomp1：ctranslate2 运行时依赖
+#   - libsndfile1：soundfile 运行时依赖
+#   - libportaudio2：pyaudio 运行时依赖（编译后仍需要共享库）
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         git \
+        gcc \
+        portaudio19-dev \
         libgomp1 \
         libsndfile1 \
+        libportaudio2 \
         ca-certificates
 
 # 1) 先装 CPU-only PyTorch + torchaudio。必须在 WhisperJAV 之前从 CPU index 安装，
@@ -60,8 +66,8 @@ RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pyt
 #    不会重复下载 GPU 版本。
 RUN pip install --no-cache-dir "whisperjav[cli] @ git+https://github.com/meizhong986/WhisperJAV.git"
 
-# 4) 清理构建工具，减小镜像体积
-RUN apt-get purge -y git && apt-get autoremove -y \
+# 3) 清理构建工具，减小镜像体积（保留 libportaudio2 运行时库）
+RUN apt-get purge -y git gcc portaudio19-dev && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 # 复制编译好的二进制并确保可执行权限

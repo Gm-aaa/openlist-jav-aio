@@ -15,11 +15,14 @@
 // CLI flags used by this runner:
 //
 //	whisperjav <input_file>          — positional audio/video path
-//	    --model          <name>      — Whisper model (large-v2/large-v3/turbo; default auto)
-//	    --language       <lang>      — source language: ja, ko, zh, en
+//	    --model          <name>      — Whisper model (e.g. medium, large-v2, large-v3, turbo)
+//	    --language       <lang>      — full name: japanese, korean, chinese, english
 //	    --output-format  srt         — emit SRT (also supports vtt, both)
 //	    --output-dir     <dir>       — directory to write the subtitle file
-//	    --cpu-only                   — force CPU mode (no GPU)
+//	    --no-signature               — disable attribution URL at end of SRT
+//	    --no-progress                — suppress progress bars
+//	    --accept-cpu-mode            — suppress GPU warning when no CUDA available
+//	    --compute-type   <type>      — CTranslate2 quantisation (auto/float16/int8/...)
 //
 // Output file naming: WhisperJAV writes <stem_of_input>.<ext>; this runner
 // renames the result to <javID>.srt via the SRTPath helper so callers always
@@ -64,8 +67,7 @@ type Runner struct {
 	language    string
 	sensitivity string // "" = WhisperJAV default; "aggressive" / "conservative" / "balanced"
 	computeType string // "" = WhisperJAV default; e.g. "int8_float32" for CPU
-	cpuOnly     bool   // true = pass --cpu-only (Docker/no-GPU environments)
-	cpuThreads  int    // 0 = WhisperJAV default (1 core); set to vCPU count for full utilisation
+	cpuOnly     bool   // true = pass --accept-cpu-mode (Docker/no-GPU environments)
 	log         *slog.Logger
 }
 
@@ -78,13 +80,9 @@ type RunnerOptions struct {
 	// "" = WhisperJAV default (int8 on CPU). "int8_float32" gives the best
 	// CPU speed/accuracy balance.
 	ComputeType string
-	// CPUOnly forces CPU-only mode via --cpu-only. Use in Docker or environments
-	// without GPU to suppress interactive GPU warnings.
+	// CPUOnly passes --accept-cpu-mode to suppress interactive GPU warnings.
+	// Use in Docker or environments without GPU.
 	CPUOnly bool
-	// CPUThreads is the number of CPU threads passed to CTranslate2 via
-	// --cpu-threads. 0 = WhisperJAV default (1). Set to your vCPU count to
-	// use all available cores.
-	CPUThreads int
 }
 
 // NewRunner creates a Runner.
@@ -104,7 +102,6 @@ func NewRunner(bin, model, language string, opts RunnerOptions, log *slog.Logger
 		sensitivity: opts.Sensitivity,
 		computeType: opts.ComputeType,
 		cpuOnly:     opts.CPUOnly,
-		cpuThreads:  opts.CPUThreads,
 		log:         log,
 	}
 }
@@ -155,18 +152,17 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		"--language", languageName(r.language),
 		"--output-format", "srt",
 		"--output-dir", tmpDir,
+		"--no-signature", // disable the WhisperJAV attribution URL appended at end of SRT
+		"--no-progress",  // suppress progress bars in captured stderr
 	}
 	if r.cpuOnly {
-		args = append(args, "--cpu-only")
+		args = append(args, "--accept-cpu-mode") // suppress interactive GPU warning when no CUDA is available
 	}
 	if r.sensitivity != "" {
 		args = append(args, "--sensitivity", r.sensitivity)
 	}
 	if r.computeType != "" {
 		args = append(args, "--compute-type", r.computeType)
-	}
-	if r.cpuThreads > 0 {
-		args = append(args, "--cpu-threads", fmt.Sprintf("%d", r.cpuThreads))
 	}
 
 	// Use a non-nil context; exec.CommandContext requires one.
@@ -222,7 +218,8 @@ func findSRT(dir string) (string, error) {
 	return "", fmt.Errorf("no .srt file found in %s", dir)
 }
 
-// languageName converts BCP-47 codes to whisperjav full language names.
+// languageName converts BCP-47 codes to the full language names that
+// WhisperJAV's --language flag expects (japanese, korean, chinese, english).
 func languageName(code string) string {
 	switch strings.ToLower(code) {
 	case "ja", "japanese":

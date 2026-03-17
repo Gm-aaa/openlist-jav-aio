@@ -109,7 +109,6 @@ func buildApp() (*App, error) {
 			Sensitivity: cfg.Subtitle.Sensitivity,
 			ComputeType: cfg.Subtitle.ComputeType,
 			CPUOnly:     cfg.Subtitle.CPUOnly,
-			CPUThreads:  cfg.Subtitle.CPUThreads,
 		},
 		log,
 	)

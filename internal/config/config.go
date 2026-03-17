@@ -72,8 +72,7 @@ type SubtitleConfig struct {
 	Language       string `mapstructure:"language"`
 	Sensitivity    string `mapstructure:"sensitivity"`   // "" = WhisperJAV default; "aggressive" / "conservative" / "balanced"
 	ComputeType    string `mapstructure:"compute_type"`  // "" = WhisperJAV default; e.g. "int8_float32" for CPU
-	CPUOnly        bool   `mapstructure:"cpu_only"`      // true = pass --cpu-only to WhisperJAV (Docker/no-GPU environments)
-	CPUThreads     int    `mapstructure:"cpu_threads"`   // 0 = WhisperJAV default (1); set to vCPU count for full utilisation
+	CPUOnly        bool   `mapstructure:"cpu_only"`      // true = pass --accept-cpu-mode to WhisperJAV (Docker/no-GPU environments)
 	FFmpegCacheDir string `mapstructure:"ffmpeg_cache_dir"`
 	KeepAudio      bool   `mapstructure:"keep_audio"`
 	KeepAudioMax   int    `mapstructure:"keep_audio_max"`
@@ -256,7 +255,6 @@ func Default() *Config {
 			Language:     "ja",
 			Sensitivity:  "",
 			ComputeType:  "",
-			CPUThreads:   0,
 			KeepAudio:    false,
 			KeepAudioMax: 5,
 		},

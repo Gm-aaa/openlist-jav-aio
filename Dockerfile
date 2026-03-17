@@ -46,20 +46,19 @@ RUN mkdir -p /app/ffmpeg /app/data/output /app/data/audio
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         git \
-        libgomp1
+        libgomp1 \
+        libsndfile1 \
+        ca-certificates
 
 # 1) 先装 CPU-only PyTorch + torchaudio。必须在 WhisperJAV 之前从 CPU index 安装，
 #    否则 openai-whisper / stable-ts 依赖会从默认 index 拉 GPU 版（需 libtorch_cuda.so）。
 #    pip 发现 torch/torchaudio 已满足版本要求后不会重复安装。
 RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# 2) 正常安装 WhisperJAV 及核心依赖。
-RUN pip install --no-cache-dir "whisperjav @ git+https://github.com/meizhong986/WhisperJAV.git"
-
-# 3) 补装运行时需要但不在核心依赖中的包。
-#    soundfile/librosa 被 speech_enhancement 和 stable_ts_asr 模块 import，
-#    但只声明在 [cli] extras 中（[cli] 整体太重，含 GPU torch 等，不能直接用）。
-RUN pip install --no-cache-dir soundfile librosa
+# 2) 安装 WhisperJAV[cli]（含 librosa、silero-vad、scikit-learn 等转录运行时依赖）。
+#    [cli] extras 声明了 torch 依赖，但 pip 发现步骤 1 已安装的 CPU torch 满足版本要求，
+#    不会重复下载 GPU 版本。
+RUN pip install --no-cache-dir "whisperjav[cli] @ git+https://github.com/meizhong986/WhisperJAV.git"
 
 # 4) 清理构建工具，减小镜像体积
 RUN apt-get purge -y git && apt-get autoremove -y \

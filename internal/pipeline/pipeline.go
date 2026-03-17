@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 type Task struct {
 	OpenListPath string
 	JavID        string
+	Sign         string // cached OpenList sign for GetFileURL reuse
 	FileURL      string
 	OutDir       string
 }
@@ -78,6 +80,27 @@ func (p *Pipeline) Run(ctx context.Context, task Task) error {
 		rec = &state.Record{OpenListPath: task.OpenListPath, JavID: task.JavID}
 	} else if err != nil {
 		return fmt.Errorf("db get %s: %w", task.OpenListPath, err)
+	}
+	// Cache sign so restart recovery can reuse it without calling /api/fs/get.
+	if task.Sign != "" {
+		rec.Sign = task.Sign
+	}
+
+	// Detect orphaned state: DB says done but output file is missing on disk.
+	// Reset the flag so the step re-runs and regenerates the file.
+	if rec.StrmDone {
+		strmFile := filepath.Join(task.OutDir, task.JavID+".strm")
+		if _, err := os.Stat(strmFile); errors.Is(err, os.ErrNotExist) {
+			log.Warn("strm file missing on disk, resetting strm_done", "expected", strmFile)
+			rec.StrmDone = false
+		}
+	}
+	if rec.SubtitleDone {
+		srtFile := filepath.Join(task.OutDir, task.JavID+".srt")
+		if _, err := os.Stat(srtFile); errors.Is(err, os.ErrNotExist) {
+			log.Warn("srt file missing on disk, resetting subtitle_done", "expected", srtFile)
+			rec.SubtitleDone = false
+		}
 	}
 
 	d := p.deps

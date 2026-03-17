@@ -142,6 +142,11 @@ subtitle:
   # 留空使用 WhisperJAV 默认值
   compute_type: ""
 
+  # 强制仅使用 CPU 推理（传递 --cpu-only 给 WhisperJAV）
+  # 无 NVIDIA GPU 的环境（如 Docker CPU 镜像）设为 true 可避免 GPU 检测警告
+  # 有 CUDA 环境的用户请保持 false 以使用 GPU 加速
+  cpu_only: false
+
   # CPU 推理线程数，留空或 0 使用 WhisperJAV 默认值（通常为 1 核）
   # 建议设置为服务器 vCPU 数量以充分利用多核，例如 12 核服务器填 12
   cpu_threads: 0

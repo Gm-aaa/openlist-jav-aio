@@ -44,6 +44,7 @@ func (r *Runner) HasEmbeddedSubtitles(ctx context.Context, videoURL string) (boo
 	start := time.Now()
 	args := []string{
 		"-user_agent", httpUserAgent,
+		"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_at_eof", "1", "-reconnect_delay_max", "5",
 		"-v", "error",
 		"-show_streams", "-select_streams", "s",
 		"-print_format", "csv",
@@ -68,6 +69,7 @@ func (r *Runner) ExtractSubtitle(ctx context.Context, videoURL, destSRT string) 
 	tmpFile := tmpName(destSRT)
 	_, err := r.run(ctx, "ffmpeg",
 		"-user_agent", httpUserAgent,
+		"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_at_eof", "1", "-reconnect_delay_max", "5",
 		"-i", videoURL,
 		"-map", "0:s:0",
 		"-c:s", "srt",
@@ -93,6 +95,7 @@ func (r *Runner) ExtractAudio(ctx context.Context, videoURL, destAudio string) e
 	path := BinPath(r.binDir, "ffmpeg")
 	cmd := exec.CommandContext(ctx, path,
 		"-user_agent", httpUserAgent,
+		"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_at_eof", "1", "-reconnect_delay_max", "5",
 		"-i", videoURL,
 		"-vn",
 		"-acodec", "copy",

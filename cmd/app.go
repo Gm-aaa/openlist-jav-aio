@@ -108,6 +108,7 @@ func buildApp() (*App, error) {
 		whisper.RunnerOptions{
 			Sensitivity: cfg.Subtitle.Sensitivity,
 			ComputeType: cfg.Subtitle.ComputeType,
+			CPUOnly:     cfg.Subtitle.CPUOnly,
 			CPUThreads:  cfg.Subtitle.CPUThreads,
 		},
 		log,

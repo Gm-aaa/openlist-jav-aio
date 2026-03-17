@@ -15,11 +15,11 @@
 // CLI flags used by this runner:
 //
 //	whisperjav <input_file>          — positional audio/video path
-//	    --model          <name>      — Whisper model (tiny/base/small/medium/large-v3;
-//	                                   also accepts litagin/anime-whisper, kotoba-v2)
-//	    --language       <lang>      — BCP-47 language code, e.g. "ja"
+//	    --model          <name>      — Whisper model (large-v2/large-v3/turbo; default auto)
+//	    --language       <lang>      — source language: ja, ko, zh, en
 //	    --output-format  srt         — emit SRT (also supports vtt, both)
 //	    --output-dir     <dir>       — directory to write the subtitle file
+//	    --cpu-only                   — force CPU mode (no GPU)
 //
 // Output file naming: WhisperJAV writes <stem_of_input>.<ext>; this runner
 // renames the result to <javID>.srt via the SRTPath helper so callers always
@@ -64,6 +64,7 @@ type Runner struct {
 	language    string
 	sensitivity string // "" = WhisperJAV default; "aggressive" / "conservative" / "balanced"
 	computeType string // "" = WhisperJAV default; e.g. "int8_float32" for CPU
+	cpuOnly     bool   // true = pass --cpu-only (Docker/no-GPU environments)
 	cpuThreads  int    // 0 = WhisperJAV default (1 core); set to vCPU count for full utilisation
 	log         *slog.Logger
 }
@@ -77,6 +78,9 @@ type RunnerOptions struct {
 	// "" = WhisperJAV default (int8 on CPU). "int8_float32" gives the best
 	// CPU speed/accuracy balance.
 	ComputeType string
+	// CPUOnly forces CPU-only mode via --cpu-only. Use in Docker or environments
+	// without GPU to suppress interactive GPU warnings.
+	CPUOnly bool
 	// CPUThreads is the number of CPU threads passed to CTranslate2 via
 	// --cpu-threads. 0 = WhisperJAV default (1). Set to your vCPU count to
 	// use all available cores.
@@ -99,6 +103,7 @@ func NewRunner(bin, model, language string, opts RunnerOptions, log *slog.Logger
 		language:    language,
 		sensitivity: opts.Sensitivity,
 		computeType: opts.ComputeType,
+		cpuOnly:     opts.CPUOnly,
 		cpuThreads:  opts.CPUThreads,
 		log:         log,
 	}
@@ -150,9 +155,9 @@ func (r *Runner) Transcribe(ctx context.Context, audioPath, outDir, javID string
 		"--language", languageName(r.language),
 		"--output-format", "srt",
 		"--output-dir", tmpDir,
-		"--no-signature",    // disable the WhisperJAV attribution URL appended at end of SRT
-		"--no-progress",     // suppress progress bars in captured stderr
-		"--accept-cpu-mode", // suppress interactive GPU warning when no CUDA is available
+	}
+	if r.cpuOnly {
+		args = append(args, "--cpu-only")
 	}
 	if r.sensitivity != "" {
 		args = append(args, "--sensitivity", r.sensitivity)

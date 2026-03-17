@@ -152,6 +152,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		task := pipeline.Task{
 			OpenListPath: olPath,
 			JavID:        javID,
+			Sign:         sign,
 			FileURL:      fileURL,
 			OutDir:       outDir,
 		}
@@ -184,7 +185,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 			if ctx.Err() != nil {
 				return
 			}
-			enqueue(rec.OpenListPath, rec.JavID, "")
+			enqueue(rec.OpenListPath, rec.JavID, rec.Sign)
 		}
 	}()
 

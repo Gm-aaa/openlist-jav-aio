@@ -72,6 +72,7 @@ type SubtitleConfig struct {
 	Language       string `mapstructure:"language"`
 	Sensitivity    string `mapstructure:"sensitivity"`   // "" = WhisperJAV default; "aggressive" / "conservative" / "balanced"
 	ComputeType    string `mapstructure:"compute_type"`  // "" = WhisperJAV default; e.g. "int8_float32" for CPU
+	CPUOnly        bool   `mapstructure:"cpu_only"`      // true = pass --cpu-only to WhisperJAV (Docker/no-GPU environments)
 	CPUThreads     int    `mapstructure:"cpu_threads"`   // 0 = WhisperJAV default (1); set to vCPU count for full utilisation
 	FFmpegCacheDir string `mapstructure:"ffmpeg_cache_dir"`
 	KeepAudio      bool   `mapstructure:"keep_audio"`

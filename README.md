@@ -72,9 +72,10 @@ translate:
 
 ```yaml
 subtitle:
-  whisper_bin: "/app/bin/whisperjav"
+  whisper_bin: "whisperjav"       # pip 安装后位于 /usr/local/bin，通过 PATH 查找
   ffmpeg_cache_dir: "/app/ffmpeg"
   audio_dir: "/app/data/audio"
+  cpu_only: true                  # Docker CPU 镜像无 GPU，跳过 GPU 检测警告
 output:
   base_dir: "/app/data/output"
 state:
@@ -103,7 +104,7 @@ docker compose logs -f
 
 ### 方式二：本地编译运行
 
-**环境要求：** Go 1.26+、Python 3.9+（用于 WhisperJAV）
+**环境要求：** Go 1.26+、Python 3.10–3.12（用于 WhisperJAV，不支持 3.9 及 3.13+）
 
 **1. 编译**
 
@@ -118,14 +119,16 @@ go build -o jav-aio ./cmd
 **2. 安装 WhisperJAV**
 
 ```bash
-# 安装 CPU-only PyTorch（无 GPU 时推荐，体积更小）
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+# 方法 A：有 NVIDIA GPU（CUDA 12.8，驱动 570+）
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install "whisperjav[cli] @ git+https://github.com/meizhong986/WhisperJAV.git"
 
-# 安装 WhisperJAV 及依赖
-pip install faster-whisper huggingface_hub
-git clone https://github.com/meizhong986/WhisperJAV.git
-cd WhisperJAV && grep -iv "torch" requirements.txt | pip install -r /dev/stdin
+# 方法 B：仅 CPU
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install "whisperjav[cli] @ git+https://github.com/meizhong986/WhisperJAV.git"
 ```
+
+> **重要：** 必须先安装 PyTorch 再安装 WhisperJAV，否则 pip 可能从默认源拉取 GPU 版 torch。
 
 **3. 下载语音识别模型**
 
@@ -171,12 +174,12 @@ openlist:
 
 ```yaml
 subtitle:
-  whisper_bin: "/usr/local/bin/whisperjav"  # WhisperJAV 可执行文件路径
+  whisper_bin: "whisperjav"  # WhisperJAV 可执行文件路径（或 PATH 中的名称）
   model: "medium"       # 模型大小，影响识别准确率和速度，见下方说明
   language: "ja"        # 视频语言，日语 JAV 填 ja
   sensitivity: ""       # 幻觉过滤灵敏度，见下方说明
   compute_type: ""      # 推理精度，见下方说明
-  cpu_threads: 0        # CPU 线程数，0 = 默认单线程，多核服务器建议填 vCPU 数量
+  cpu_only: false       # 无 GPU 环境设为 true，跳过 GPU 检测警告
 ```
 
 **模型选择（`model`）**

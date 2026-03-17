@@ -4,6 +4,31 @@
 
 ---
 
+## [0.1.4] - 2026-03-17
+
+### 修复
+
+- **Dockerfile WhisperJAV 安装** — 改用 `whisperjav[cli]` extras 安装，包含全部转录运行时依赖（silero-vad、scikit-learn 等）；之前仅手动补装 soundfile/librosa，运行时缺包报 ImportError
+- **Dockerfile 缺少 libsndfile1** — soundfile 运行时依赖的系统库未安装，导致 `OSError: cannot load library`
+- **Docker whisper_bin 路径错误** — `config.docker.yaml` 指向 `/app/bin/whisperjav`（不存在），pip 实际安装到 `/usr/local/bin`；改为 `whisperjav` 通过 PATH 查找
+- **WhisperJAV CLI 参数与源码不匹配** — 按实际 argparse 定义校正：恢复 `--no-signature`、`--no-progress`、`--accept-cpu-mode`；移除不存在的 `--cpu-only`、`--cpu-threads`
+- **`run` 命令冗余 API 调用** — 未检查 `IsComplete()`，对已完成文件仍调用 `/api/fs/get`；1000 个已完成文件 = 1000 次浪费的 API 调用
+- **重启恢复丢失 sign** — daemon 重启后重新入队的任务 sign 为空，强制调用 `/api/fs/get` 获取新签名；现在 sign 缓存在 SQLite，重启后直接复用
+- **DB 与文件系统状态不同步** — DB 标记 `strm_done=1` 或 `subtitle_done=1` 但文件被删除时，pipeline 不会重新生成；新增孤立状态检测，文件缺失时自动重置标记
+- **STRM 无条件覆写** — `strm.Generate()` 每次都写入磁盘，即使内容未变；改为幂等写入，内容相同时跳过
+- **`config.docker.yaml` 幽灵配置** — 移除无效的 `id_extract: true`（Go 代码中无对应字段，被静默忽略）
+
+### 新增
+
+- **`cpu_only` 配置项** — 控制是否传递 `--accept-cpu-mode` 给 WhisperJAV，Docker 默认 true，有 GPU 环境设 false
+- **SQLite `sign` 列** — 缓存 OpenList 下载签名，减少重启后的 API 调用（含旧库自动迁移）
+
+### 移除
+
+- **`cpu_threads` 配置项** — WhisperJAV CLI 不支持此参数，移除以避免运行时报错
+
+---
+
 ## [0.1.3] - 2026-03-16
 
 ### 修复
@@ -55,7 +80,7 @@
 - **DeepLX 翻译提供商** — 新增 `deeplx` provider，20 并发逐块翻译
 - **并发 LLM 翻译** — OpenAI / Ollama 均改为 50 块/批、10 并发分块翻译
 - **`jav-aio model download`** — 从 HuggingFace 预下载 faster-whisper 模型
-- **WhisperJAV 调优参数** — 新增 `sensitivity`、`compute_type`、`cpu_threads` 配置项
+- **WhisperJAV 调优参数** — 新增 `sensitivity`、`compute_type` 配置项
 - **`translate.max_tokens`** 配置项
 
 ---
@@ -74,7 +99,7 @@
 **字幕识别**
 - 三级字幕检测：外挂字幕 → 内嵌字幕流 → WhisperJAV 语音识别
 - 内嵌 ffmpeg/ffprobe 二进制（Linux/Windows），无需手动安装
-- WhisperJAV 可配置参数：`sensitivity`、`compute_type`、`cpu_threads`
+- WhisperJAV 可配置参数：`sensitivity`、`compute_type`
 - `jav-aio model download` 命令，自动从 HuggingFace 下载 faster-whisper 模型
 - CRLF 归一化，修复 Windows 下 WhisperJAV 输出的 SRT 解析问题
 

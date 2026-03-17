@@ -159,6 +159,15 @@ func (p *Processor) extractAudio(ctx context.Context, videoURL, javID string) (s
 	if err := p.ffmpeg.ExtractAudio(ctx, videoURL, audioPath); err != nil {
 		return "", err
 	}
+	// Validate extracted audio is not empty (can happen if URL expired or video has no audio).
+	fi, err := os.Stat(audioPath)
+	if err != nil {
+		return "", fmt.Errorf("stat extracted audio: %w", err)
+	}
+	if fi.Size() == 0 {
+		os.Remove(audioPath)
+		return "", fmt.Errorf("extracted audio %s is empty (0 bytes); source video may lack an audio stream or the URL may have expired", audioPath)
+	}
 	return audioPath, nil
 }
 

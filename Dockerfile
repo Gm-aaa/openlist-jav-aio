@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         git \
         gcc \
+        libc6-dev \
         portaudio19-dev \
         libgomp1 \
         libsndfile1 \
@@ -67,7 +68,7 @@ RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pyt
 RUN pip install --no-cache-dir "whisperjav[cli] @ git+https://github.com/meizhong986/WhisperJAV.git"
 
 # 3) 清理构建工具，减小镜像体积（保留 libportaudio2 运行时库）
-RUN apt-get purge -y git gcc portaudio19-dev && apt-get autoremove -y \
+RUN apt-get purge -y git gcc libc6-dev portaudio19-dev && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 # 复制编译好的二进制并确保可执行权限
